@@ -1,0 +1,3 @@
+[submodule "third_party/TransformerLens"]
+	path = third_party/TransformerLens
+	url = https://github.com/galkesten/TransformerLens.git
