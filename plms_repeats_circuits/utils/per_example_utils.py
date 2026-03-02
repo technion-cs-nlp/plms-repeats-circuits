@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from typing import List, Tuple, Dict, Union
-from protein_circuits.EAP.graph import NeuronGraph, Graph, GraphType
+from plms_repeats_circuits.EAP.graph import NeuronGraph, Graph, GraphType
 
 
 def find_npz_files(base_dir: Path, seeds: List[int], per_layer: bool) -> List[Path]:

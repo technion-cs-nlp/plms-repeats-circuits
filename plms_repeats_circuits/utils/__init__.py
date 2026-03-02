@@ -1,1 +1,1 @@
-from .esm3_utils import get_probs_from_logits
+from .esm_utils import get_probs_from_logits

@@ -1,5 +1,5 @@
 import torch
-from protein_circuits.utils.model_utils import get_masked_token_logits
+from plms_repeats_circuits.utils.model_utils import get_masked_token_logits
 from functools import partial
 import torch
 

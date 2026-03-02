@@ -11,8 +11,8 @@ import plotly.express as px
 import torch
 import seaborn as sns
 from transformer_lens import HookedESM3
-from protein_circuits.EAP.graph import Graph, GraphType
-from protein_circuits.utils.per_example_utils import (
+from plms_repeats_circuits.EAP.graph import Graph, GraphType
+from plms_repeats_circuits.utils.per_example_utils import (
     load_importance_scores,
     normalize_scores,
     build_component_index_mapping,
