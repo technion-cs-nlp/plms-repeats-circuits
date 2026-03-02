@@ -1,2 +1,2 @@
 # Dataset CSVs (will be uploaded to Hugging Face)
-Datasets/**/*.csv
+datasets/**/*.csv

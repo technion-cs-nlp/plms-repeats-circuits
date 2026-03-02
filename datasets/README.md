@@ -1,0 +1,8 @@
+# Datasets
+
+This document describes the datasets used in the paper. For a description of every CSV column see [`DATASET_FIELDS.md`](DATASET_FIELDS.md).
+
+## Evaluation Datasets
+
+The datasets are organized by repeat type. For each repeat type, an evaluation dataset was created using the method described in [`scripts/initial_datasets_creation/DATASETS_CREATION.MD`](../scripts/initial_datasets_creation/DATASETS_CREATION.MD) and in the paper. These evaluation datasets are used to produce the model accuracy results on repeat prediction tasks reported in Table 1 of the paper. Each repeat type folder contains an `evaluation/` subfolder with the corresponding evaluation CSV.
+
