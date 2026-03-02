@@ -93,3 +93,15 @@ python scripts/initial_datasets_creation/sample_based_on_identity_percentage.py 
   --output_csv datasets/approximate/evaluation/approximate_repeats_eval.csv \
   --random_state 42
 ```
+
+## Baseline Dataset
+
+Sample 100k proteins from UniRef50 (length range 50–500):
+
+```bash
+seqkit seq -m 50 -M 500 <input.fasta> \
+  | seqkit sample -n 100000 -s 42 \
+  > <output.fasta>
+```
+
+Then extract the sequences and save them to a CSV with a single column `seq`.
