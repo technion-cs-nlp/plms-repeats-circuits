@@ -21,6 +21,7 @@ def filter_identical(source_df, predictions_all, args):
     filtered = merged[merged["accuracy"] >= args.accuracy_threshold]
     if len(filtered) < args.sample_size:
         print(f"Warning: only {len(filtered)} samples after filtering (requested {args.sample_size})")
+        return filtered
     return sample_df(filtered, args.sample_size, args.random_seed)
 
 

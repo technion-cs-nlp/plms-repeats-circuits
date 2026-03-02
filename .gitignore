@@ -18,3 +18,11 @@ __pycache__/
 results/
 
 scripts/evaluation_experiment/run_evaluate_sbatch.sh
+
+datasets2
+
+results2/
+
+scripts/evaluation_experiment/verify_predictions_vs_source.py
+scripts/evaluation_experiment/verify_filtered_datasets.py
+py-sbatch.sh

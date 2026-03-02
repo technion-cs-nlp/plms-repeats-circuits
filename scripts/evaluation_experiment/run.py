@@ -39,9 +39,9 @@ def verify_datasets_structure(datasets_root, datasets):
         if not path.exists():
             missing.append(str(path))
     if missing:
-        print("Datasets root missing expected files:")
+        print("Datasets root missing expected files:", flush=True)
         for p in missing:
-            print(f"  - {p}")
+            print(f"  - {p}", flush=True)
         sys.exit(1)
 
 
@@ -56,9 +56,9 @@ def verify_prediction_results(results_root, model_type, datasets):
         if not pred_path.exists():
             missing.append(str(pred_path))
     if missing:
-        print("Missing predictions (run evaluate first):")
+        print("Missing predictions (run evaluate first):", flush=True)
         for p in missing:
-            print(f"  - {p}")
+            print(f"  - {p}", flush=True)
         sys.exit(1)
 
 
@@ -73,9 +73,9 @@ def verify_analyze_inputs(results_root, model_type):
     ]
     missing = [str(p) for p in required if not p.exists()]
     if missing:
-        print("Missing predictions for analyze (run evaluate first):")
+        print("Missing predictions for analyze (run evaluate first):", flush=True)
         for p in missing:
-            print(f"  - {p}")
+            print(f"  - {p}", flush=True)
         sys.exit(1)
 
 
@@ -92,19 +92,22 @@ def results_dir(results_root, model_type, name=None):
 def run_evaluate(datasets_root, results_root, model_type, datasets, batch_size):
     verify_datasets_structure(datasets_root, datasets)
 
+    dtype = "bfloat16" if model_type == "esm-c" else "float32"
+
     # Delete previous results for datasets we're recomputing
     for name in datasets:
         out = results_dir(results_root, model_type, name)
         if out.exists():
             shutil.rmtree(out)
-            print(f"[evaluate] Removed previous results for {name}")
+            print(f"[evaluate] Removed previous results for {name}", flush=True)
 
     for name in datasets:
+        print(f"--- Dataset: {name} ---", flush=True)
         src = dataset_path(datasets_root, name)
         out = results_dir(results_root, model_type, name)
         out.mkdir(parents=True, exist_ok=True)
         mode = "baseline" if name == "baseline" else "repeat"
-        print(f"[evaluate] {name} ({mode}) -> {out}")
+        print(f"[evaluate] {name} ({mode}) -> {out}", flush=True)
 
         evaluate_module.main([
             "--input_file", str(src),
@@ -112,6 +115,7 @@ def run_evaluate(datasets_root, results_root, model_type, datasets, batch_size):
             "--model_type", model_type,
             "--batch_size", str(batch_size),
             "--mode", mode,
+            "--dtype", dtype,
         ])
 
 
@@ -125,6 +129,7 @@ def run_filter(datasets_root, results_root, model_type, datasets, configs):
     verify_prediction_results(results_root, model_type, filter_datasets)
 
     for name in filter_datasets:
+        print(f"--- Dataset: {name} ---", flush=True)
         res = results_dir(results_root, model_type, name)
         pred_path = res / "predictions.csv"
         src = dataset_path(datasets_root, name)
@@ -143,11 +148,11 @@ def run_filter(datasets_root, results_root, model_type, datasets, configs):
             out_path = out_dir / out_name
             if out_path.exists():
                 out_path.unlink()
-                print(f"[filter] Removed previous {out_name} for {name}")
+                print(f"[filter] Removed previous {out_name} for {name}", flush=True)
 
         for out_name, filter_type in runs:
             out_path = out_dir / out_name
-            print(f"[filter] {name} filter_type={filter_type} -> {out_path}")
+            print(f"[filter] {name} filter_type={filter_type} -> {out_path}", flush=True)
 
             filter_module.main([
                 "--dataset_type", cfg.get("dataset_type", name),
@@ -169,7 +174,7 @@ def run_analyze(datasets_root, results_root, model_type):
     # Delete previous analysis results
     if out.exists():
         shutil.rmtree(out)
-        print("[analyze] Removed previous analysis results")
+        print("[analyze] Removed previous analysis results", flush=True)
 
     out.mkdir(parents=True, exist_ok=True)
 
@@ -180,7 +185,7 @@ def run_analyze(datasets_root, results_root, model_type):
         "baseline": res / "baseline" / "baseline_predictions.csv",
     }
 
-    print(f"[analyze] -> {out}")
+    print(f"[analyze] -> {out}", flush=True)
     analyze_module.main([
         "--approximate_source", str(dataset_path(datasets_root, "approximate")),
         "--approximate_all", str(required["approximate_all"]),
@@ -216,20 +221,23 @@ def main():
     results_root = args.results_root.resolve()
 
     if "evaluate" in args.steps:
+        print("=== Step: evaluate ===", flush=True)
         run_evaluate(datasets_root, results_root, args.model_type, args.datasets, args.batch_size)
 
     if "filter" in args.steps:
+        print("=== Step: filter ===", flush=True)
         run_filter(datasets_root, results_root, args.model_type, args.datasets, FILTER_CONFIGS)
 
     if "analyze" in args.steps:
+        print("=== Step: analyze ===", flush=True)
         required_for_analyze = {"synthetic", "identical", "approximate", "baseline"}
         missing = required_for_analyze - set(args.datasets)
         if missing:
-            print("Analyze step requires all datasets. Missing:", sorted(missing))
+            print("Analyze step requires all datasets. Missing:", sorted(missing), flush=True)
             sys.exit(1)
         run_analyze(datasets_root, results_root, args.model_type)
 
-    print("Done.")
+    print("Done.", flush=True)
 
 
 if __name__ == "__main__":

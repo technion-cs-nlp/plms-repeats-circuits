@@ -83,6 +83,10 @@ REPEAT_HEADER = [
 ]
 
 
+def _get_dtype(dtype_str):
+    return {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[dtype_str]
+
+
 def run_repeat_evaluation(args):
     """Run repeat prediction evaluation on all proteins in the dataset."""
     device = get_device()
@@ -91,6 +95,7 @@ def run_repeat_evaluation(args):
         cache_attention_activations=False, cache_mlp_activations=False,
         output_type="all", cache_attn_pattern=False, split_qkv_input=False,
     )
+    model = model.to(_get_dtype(args.dtype))
     tokenizer = load_tokenizer_by_model_type(args.model_type)
 
     input_path = Path(args.input_file)
@@ -176,6 +181,7 @@ def run_baseline_evaluation(args):
         cache_attention_activations=False, cache_mlp_activations=False,
         output_type="all", cache_attn_pattern=False, split_qkv_input=False,
     )
+    model = model.to(_get_dtype(args.dtype))
     tokenizer = load_tokenizer_by_model_type(args.model_type)
 
     input_path = Path(args.input_file)
@@ -238,6 +244,12 @@ def main(args=None):
         help="'repeat' evaluates on repeat positions; 'baseline' on random positions",
     )
     parser.add_argument("--random_seed", type=int, default=42, help="Random seed (baseline mode)")
+    parser.add_argument(
+        "--dtype",
+        choices=["float32", "bfloat16", "float16"],
+        default="float32",
+        help="Model dtype (default float32); use bfloat16 for esm-c to match paper",
+    )
     args = parser.parse_args(args)
 
     output_dir = Path(args.output_dir)
@@ -245,10 +257,12 @@ def main(args=None):
     logs_folder = output_dir / "logs"
     logs_folder.mkdir(parents=True, exist_ok=True)
 
+    log_file = logs_folder / f"evaluate_{args.mode}.log"
     logging.basicConfig(
-        filename=str(logs_folder / f"evaluate_{args.mode}.log"),
+        filename=str(log_file),
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
+        force=True,
     )
     logging.info(f"Args: {vars(args)}")
 

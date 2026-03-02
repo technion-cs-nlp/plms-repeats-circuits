@@ -56,15 +56,15 @@ Expected datasets for evaluation are in `datasets/<repeat_type>/evaluation/`.
 **Examples:**
 
 ```bash
-python run.py --model_type esm3 --steps evaluate filter analyze --datasets synthetic identical approximate baseline
+python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate filter analyze --datasets synthetic identical approximate baseline
 # Full pipeline: esm3, all 4 datasets, all steps
 
-python run.py --model_type esm3 --steps evaluate
+python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate
 # Evaluate only (filter and analyze skipped)
 
-python run.py --model_type esm-c --steps evaluate filter --datasets synthetic identical
+python scripts/evaluation_experiment/run.py --model_type esm-c --steps evaluate filter --datasets synthetic identical
 # esm-c, only synthetic and identical (analyze skipped; analyze needs all datasets)
 
-python run.py --model_type esm3 --datasets_root /path/to/datasets --results_root /path/to/results
+python scripts/evaluation_experiment/run.py --model_type esm3 --datasets_root /path/to/datasets --results_root /path/to/results
 # Custom input/output roots
 ```
