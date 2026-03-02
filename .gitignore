@@ -10,3 +10,11 @@ __pycache__/
 # Jupyter checkpoints
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
+
+# Log files
+*.log
+
+# Experiment results (generated, not committed)
+results/
+
+scripts/evaluation_experiment/run_evaluate_sbatch.sh

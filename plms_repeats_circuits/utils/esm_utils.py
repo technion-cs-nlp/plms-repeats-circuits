@@ -153,14 +153,6 @@ def _load_esm_c_tokenizer(model):
     print(f"loading esm-c tokenizer")
     return model.tokenizer
 
-def load_tokenizer(model_type, model):
-    if model_type == "esm3":
-        return _load_esm3_tokenizer()
-    elif model_type == "esm-c" or model_type == "esmc" or model_type == "esmc_600m" or model_type == "esmc_300m":
-        return _load_esm_c_tokenizer(model)
-    else:
-        raise ValueError(f"Invalid model type: {model_type}")
-
 def load_tokenizer_by_model_type(model_type):
     if model_type == "esm3":
         print(f"loading esm3 tokenizer")
