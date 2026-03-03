@@ -142,7 +142,7 @@ def run_evaluate(
                 "--output_dir", str(output_dir),
                 "--output_filename", output_filename,
                 "--model_type", model_type,
-                "--dtype", "float32",
+                "--dtype", "bfloat16" if model_type == "esm-c" else "float32",
                 "--mode", mode,
                 "--method", spec["method"],
                 "--random_seed", str(random_seed),
