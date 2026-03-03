@@ -248,7 +248,7 @@ def main(args=None):
         "--dtype",
         choices=["float32", "bfloat16", "float16"],
         default="float32",
-        help="Model dtype (default float32); use bfloat16 for esm-c to match paper",
+        help="Model dtype (default float32);",
     )
     args = parser.parse_args(args)
 
