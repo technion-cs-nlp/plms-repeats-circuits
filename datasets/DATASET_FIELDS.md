@@ -30,3 +30,10 @@
 | `blosum_similarity_percentage` | float | Average percentage of alignment positions where the two residues have a non-negative BLOSUM62 score. |
 | `indels_score_percentage` | float | Average percentage of alignment positions that are indel positions per pairwise comparison, as a fraction of the full alignment length. |
 | `substitutions_score_percentage` | float | Average percentage of alignment positions that are substitution positions per pairwise comparison, as a fraction of the full alignment length. |
+| `accuracy` | float | Model accuracy on masked-token prediction for this protein (fraction of correct predictions across all masked positions of repeat tokens). |
+| `avg_prediction_prob` | float | Average probability assigned to the true label across all masked positions of repeat tokens. |
+| `accuracy_identical` | float | Accuracy over *aligned-identical* positions only (positions where the aligned repeat units match exactly). Approximate repeats. |
+| `avg_prob_aligned_identical` | float | Average prediction probability on aligned-identical positions. Approximate repeats. |
+| `count_aligned_identical` | int | Number of aligned-identical positions. Approximate repeats. |
+| `correct_aligned_identical` | int | Number of correct predictions among aligned-identical positions. Approximate repeats. |
+| `high_confidence_positions` | list of int | List of aligned-identical positions the model predicted correctly with high confidence (in the paper we used 0.0, so any correct prediction qualifies). Approximate repeats. |
