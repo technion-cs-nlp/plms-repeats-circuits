@@ -7,7 +7,11 @@ import evaluate as evaluate_module
 import filter as filter_module
 import analyze as analyze_module
 
-from plms_repeats_circuits.utils.counterfactuals_config import COUNTERFACTUAL_METHODS
+from plms_repeats_circuits.utils.counterfactuals_config import (
+    COUNTERFACTUAL_METHODS,
+    _main_pattern,
+    _baseline_pattern,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -100,7 +104,6 @@ def run_evaluate(
     repeat_types: list[str],
     main_only: bool = False,
     random_seed: int = 42,
-    dtype: str = "float32",
     eval_methods: list[str] = [],
 ):
     """Run evaluate for each (repeat_type, model) and each method."""
@@ -111,6 +114,9 @@ def run_evaluate(
         input_file = _find_input_file(input_dir)
         output_dir = _results_dir(results_root, folder, model_type)
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"\n--- repeat_type: {rt} ---", flush=True)
+        print(f"  input : {input_file}", flush=True)
+        print(f"  output: {output_dir}", flush=True)
 
         experiments = []
         for m in COUNTERFACTUAL_METHODS:
@@ -123,20 +129,20 @@ def run_evaluate(
                 if m["main_eval"]:
                     experiments.append(("main", m["main_eval"], m["name"]))
                 if m.get("baseline_eval"):
-                    experiments.append(("baseline", m["baseline_eval"], f"{m['name']}_baseline"))
+                    experiments.append(("baseline", m["baseline_eval"], m["name"]))
 
-        for i, (kind, spec, name) in enumerate(experiments):
+        for kind, spec, name in experiments:
             mode = "random_only_identical" if (rt in ("approximate", "similar")) else "random"
             if kind == "baseline":
                 mode = "baseline_experiment_similiar" if rt in ("approximate", "similar") else "baseline_experiment_identical"
-            base_name = m["name"]
-            output_filename = f"{folder}_counterfactual_{base_name}" if kind == "main" else f"{folder}_counterfactual_{base_name}_baseline"
+            pattern = _main_pattern(name) if kind == "main" else _baseline_pattern(name)
+            output_filename = f"{folder}_{pattern}"
             args = [
                 "--input_file", str(input_file),
                 "--output_dir", str(output_dir),
                 "--output_filename", output_filename,
                 "--model_type", model_type,
-                "--dtype", dtype,
+                "--dtype", "float32",
                 "--mode", mode,
                 "--method", spec["method"],
                 "--random_seed", str(random_seed),
@@ -149,7 +155,7 @@ def run_evaluate(
                 args.extend(["--corrupted_amino_acid_type2", str(t2)])
             if spec.get("pct") is not None:
                 args.extend(["--pct_corruption", str(spec["pct"])])
-            print(f"[evaluate] {rt} {name}")
+            print(f"  [{kind}] {name} (mode={mode}) -> {output_filename}.csv", flush=True)
             evaluate_module.main(args)
 
 
@@ -209,7 +215,6 @@ def main():
                         help="Methods for filter intersection")
     parser.add_argument("--main_only", action="store_true", help="Run only main experiments (no baseline)")
     parser.add_argument("--random_seed", type=int, default=42)
-    parser.add_argument("--dtype", choices=["float32", "bfloat16", "float16"], default="float32", help="Model dtype for evaluate step")
     args = parser.parse_args()
 
     datasets_root = args.datasets_root.resolve()
@@ -227,19 +232,31 @@ def main():
             print(f"  Available: {all_method_names}", flush=True)
             sys.exit(1)
 
+    effective_args = vars(args).copy()
     if "evaluate" in args.steps:
-        print("=== Step: evaluate ===", flush=True)
+        effective_args["eval_methods"] = eval_methods
+    print("=" * 60, flush=True)
+    print("Counterfactual Experiment Pipeline", flush=True)
+    for k, v in effective_args.items():
+        print(f"  {k}: {v}", flush=True)
+    print("=" * 60, flush=True)
+
+    if "evaluate" in args.steps:
+        print("\n=== Step: evaluate ===", flush=True)
         run_evaluate(
             datasets_root, results_root, args.model_type, args.repeat_types,
-            main_only=args.main_only, random_seed=args.random_seed, dtype=args.dtype,
+            main_only=args.main_only, random_seed=args.random_seed,
             eval_methods=eval_methods,
         )
+        print("=== Step: evaluate done ===\n", flush=True)
     if "filter" in args.steps:
-        print("=== Step: filter ===", flush=True)
+        print("\n=== Step: filter ===", flush=True)
         run_filter_step(datasets_root, results_root, args.model_type, args.repeat_types, args.filter_methods)
+        print("=== Step: filter done ===\n", flush=True)
     if "analyze" in args.steps:
-        print("=== Step: analyze ===", flush=True)
+        print("\n=== Step: analyze ===", flush=True)
         run_analyze_step(results_root, args.model_type, args.repeat_types)
+        print("=== Step: analyze done ===\n", flush=True)
 
     print("Done.", flush=True)
 
