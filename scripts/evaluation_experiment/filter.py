@@ -25,10 +25,14 @@ def filter_identical(source_df, predictions_all, args):
     return sample_df(filtered, args.sample_size, args.random_seed)
 
 
-def _high_confidence_positions(enriched_all, filter_type):
-    """All eligible positions that are correct, grouped per protein."""
+def _high_confidence_positions(enriched_all, filter_type, confidence_threshold=0.0):
+    """All eligible positions that are correct and meet confidence threshold, grouped per protein."""
     scope = "aligned_identical" if filter_type == "none" else filter_type
-    mask = scope_mask(enriched_all, scope) & (enriched_all["is_correct"] == True)
+    mask = (
+        scope_mask(enriched_all, scope)
+        & (enriched_all["is_correct"] == True)
+        & (enriched_all["true_label_probability"] >= confidence_threshold)
+    )
     eligible = enriched_all.loc[mask]
     grouped = eligible.groupby(KEY_COLS)["masked_position"].apply(
         lambda x: sorted(x.unique().tolist())
@@ -70,14 +74,21 @@ def filter_approximate(source_df, predictions_all, args):
         on=KEY_COLS, how="left",
     )
 
-    # High-confidence positions (all eligible correct positions)
-    hc = _high_confidence_positions(enriched_all, args.filter_type)
+    # High-confidence positions (all eligible correct positions meeting confidence threshold)
+    hc = _high_confidence_positions(
+        enriched_all, args.filter_type, args.confidence_threshold
+    )
     result = result.merge(hc, on=KEY_COLS, how="left")
     result["high_confidence_positions"] = result["high_confidence_positions"].apply(
         lambda x: x if isinstance(x, list) else []
     )
 
-    result = result[result["accuracy_identical"] >= args.accuracy_threshold]
+    has_high_confidence = result["high_confidence_positions"].apply(
+        lambda x: len(x) > 0 if isinstance(x, list) else False
+    )
+    result = result[
+        (result["accuracy_identical"] >= args.accuracy_threshold) & has_high_confidence
+    ]
     return sample_df(result, args.sample_size, args.random_seed)
 
 
@@ -103,6 +114,8 @@ def main(args=None):
                         help="Min accuracy threshold (identical/synthetic: accuracy; approximate: accuracy_identical)")
     parser.add_argument("--filter_type", choices=["none", "near_sub", "near_indel"],
                         default="none", help="Mutation proximity filter (approximate only)")
+    parser.add_argument("--confidence_threshold", type=float, default=0.0,
+                        help="Min confidence for high_confidence_positions (approximate only)")
     args = parser.parse_args(args)
 
     predictions_all = pd.read_csv(args.predictions_all)

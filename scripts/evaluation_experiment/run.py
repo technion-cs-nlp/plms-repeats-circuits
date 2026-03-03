@@ -25,6 +25,7 @@ FILTER_CONFIGS = {
     "approximate": {
         "dataset_type": "approximate",
         "accuracy_threshold": 0.8,
+        "confidence_threshold": 0.0,
         "sample_size": 5000,
         "filter_types": ["near_sub"],
     },
@@ -154,7 +155,7 @@ def run_filter(datasets_root, results_root, model_type, datasets, configs):
             out_path = out_dir / out_name
             print(f"[filter] {name} filter_type={filter_type} -> {out_path}", flush=True)
 
-            filter_module.main([
+            filter_args = [
                 "--dataset_type", cfg.get("dataset_type", name),
                 "--predictions_all", str(pred_path),
                 "--source_dataset", str(src),
@@ -162,7 +163,10 @@ def run_filter(datasets_root, results_root, model_type, datasets, configs):
                 "--sample_size", str(cfg.get("sample_size", 5000)),
                 "--accuracy_threshold", str(cfg.get("accuracy_threshold", 1.0)),
                 "--filter_type", filter_type,
-            ])
+            ]
+            if "confidence_threshold" in cfg:
+                filter_args.extend(["--confidence_threshold", str(cfg["confidence_threshold"])])
+            filter_module.main(filter_args)
 
 
 def run_analyze(datasets_root, results_root, model_type):
