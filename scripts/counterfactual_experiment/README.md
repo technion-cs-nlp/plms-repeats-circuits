@@ -6,13 +6,11 @@ This experiment tests whether corrupting protein repeat regions causes language 
 
 1) **evaluate.py** — This script takes an input dataset (proteins with repeats, filtered from the evaluation experiment) and applies one counterfactual method to each protein. It corrupts positions in the other repeat instances and tests whether the model's prediction at a masked position changes before and after corruption. It outputs one CSV per method containing key columns (`rep_id`, `repeat_key`) plus result columns (`masked_position`, `corrupted_positions`, `replacements`, `corrupted_sequence`, `masked_repeat_example`, `corrupted_repeat_example`, `true_token_prob_before`, `true_token_prob_after`, `is_corrupt_changed_argmax`, etc.). Run once per method (all methods are run automatically via run.py).
 
-2) **filter.py** — This script takes the evaluate outputs across a set of selected methods and finds the intersection of positions where all methods caused the argmax prediction to change. For each method it then produces a filtered output file containing the source dataset rows for those common positions, merged with that method's result columns. Output goes to `datasets/{repeat_type}/{model}/circuit_discovery/`.
+2) **filter.py** — This script takes the evaluate outputs across a set of selected methods and finds the intersection of positions where all methods caused the argmax prediction to change. For each method it then produces a filtered output file containing the source dataset rows for those common positions, merged with that method's result columns. Output goes to `datasets/{repeat_type}/{model}/circuit_discovery/`. See [`datasets/README.md`](../../datasets/README.md) for more on circuit discovery datasets. 
 
 3) **analyze.py** — This script discovers the evaluate output CSVs, separates them into main and baseline methods, computes two metrics per method (fraction of positions where argmax changed, and mean probability drop of the correct token), and creates a grouped bar chart comparing Real vs Baseline Counterfactual. Output is saved as `.png` and `.pdf`. Can be run via `run.py` or interactively via `analyze.ipynb`.
 
-4) **analyze.ipynb** — A notebook version of the analyze step. Useful for interactively exploring results or regenerating plots for a specific repeat type / model without re-running the full pipeline. Open the notebook from the repo root, set `input_dir` to the evaluate output directory (e.g. `results/counterfactual/identical/esm3`) and `output_dir` for where to save the plot, then run all cells.
-
-5) **run.py** — The main entry point. Use this script; do not call evaluate.py, filter.py, or analyze.py directly.
+4) **run.py** — The main entry point. Use this script; do not call evaluate.py, filter.py, or analyze.py directly.
 
 ---
 

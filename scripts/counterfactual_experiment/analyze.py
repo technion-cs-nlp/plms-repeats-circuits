@@ -11,10 +11,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from plms_repeats_circuits.utils.counterfactuals_config import (
-    MAIN_METHOD_PATTERNS,
-    BASELINE_METHOD_PATTERNS,
-)
+from plms_repeats_circuits.utils.counterfactuals_config import identify_result_file
 
 try:
     import kaleido
@@ -28,24 +25,14 @@ def discover_files(input_dir: Path) -> Tuple[Dict[str, Path], Dict[str, Path]]:
     """Discover counterfactual result files; separate main vs baseline."""
     main_files = {}
     baseline_files = {}
-    # Sort patterns by length descending so specific patterns (e.g. blosum-opposite)
-    # match before shorter ones (e.g. blosum).
-    sorted_baseline = sorted(BASELINE_METHOD_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
-    sorted_main = sorted(MAIN_METHOD_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
     for csv_file in sorted(input_dir.rglob("*.csv")):
-        fn = csv_file.name
-        for pattern, display_name in sorted_baseline:
-            if pattern in fn:
-                baseline_files[display_name] = csv_file
-                break
-    for csv_file in sorted(input_dir.rglob("*.csv")):
-        if csv_file in baseline_files.values():
+        display_name, kind = identify_result_file(csv_file.stem)
+        if display_name is None:
             continue
-        fn = csv_file.name
-        for pattern, display_name in sorted_main:
-            if pattern in fn:
-                main_files[display_name] = csv_file
-                break
+        if kind == "baseline":
+            baseline_files[display_name] = csv_file
+        else:
+            main_files[display_name] = csv_file
     return main_files, baseline_files
 
 

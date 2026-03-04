@@ -37,3 +37,10 @@
 | `count_aligned_identical` | int | Number of aligned-identical positions. Approximate repeats. |
 | `correct_aligned_identical` | int | Number of correct predictions among aligned-identical positions. Approximate repeats. |
 | `high_confidence_positions` | list of int | List of aligned-identical positions the model predicted correctly with high confidence (in the paper we used 0.0, so any correct prediction qualifies). Approximate repeats. |
+| `masked_position` | int | 0-based position in the sequence of the masked token. |
+| `corrupted_positions` | list of int | Positions that were corrupted by the counterfactual method. |
+| `replacements` | string | The replacement tokens applied at corrupted positions. |
+| `corrupted_sequence` | string | Full sequence after applying the counterfactual corruption. |
+| `masked_repeat_example` | string | Example of the repeat segment showing the masked position. |
+| `corrupted_repeat_example` | string | Example of the repeat segment after corruption. |
+| `is_corrupt_changed_argmax` | bool | Whether the corruption changed the model's argmax prediction at the masked position. |

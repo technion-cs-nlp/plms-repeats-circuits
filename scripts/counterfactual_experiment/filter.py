@@ -5,27 +5,23 @@ from typing import Dict, List, Set, Tuple
 
 import pandas as pd
 
-from plms_repeats_circuits.utils.counterfactuals_config import METHOD_PATTERNS
+from plms_repeats_circuits.utils.counterfactuals_config import METHOD_PATTERNS, find_file_for_method
 
 
 def find_files_by_methods(input_dir: Path, methods: List[str]) -> Dict[str, Path]:
-    """Find CSV files matching method patterns."""
+    """Find main CSV files for each method using find_file_for_method."""
     csv_dict = {}
     for method in methods:
         if method not in METHOD_PATTERNS:
             print(f"Warning: Unknown method '{method}'. Skipping.")
             print(f"  Available: {', '.join(sorted(METHOD_PATTERNS.keys()))}")
             continue
-        pattern = METHOD_PATTERNS[method]
-        found = False
-        for csv_file in input_dir.rglob("*.csv"):
-            if pattern in csv_file.name:
-                csv_dict[method] = csv_file
-                print(f"Found {method}: {csv_file.name}")
-                found = True
-                break
-        if not found:
-            print(f"Warning: No file for method '{method}' (pattern: {pattern})")
+        csv_file = find_file_for_method(method, input_dir)
+        if csv_file:
+            csv_dict[method] = csv_file
+            print(f"Found {method}: {csv_file.name}")
+        else:
+            print(f"Warning: No file for method '{method}'")
     return csv_dict
 
 
