@@ -109,6 +109,58 @@ Evaluates a circuit by running the model with non-circuit components patched (co
 
 ---
 
+## circuit_selection.py
+
+Circuit selection: choose which edges, nodes, or neurons form the circuit from attribution scores. Each function takes an optional `log` parameter: if `logging.Logger` is passed, messages go to the logger; otherwise they are printed.
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| **`select_circuit_edges`** | Edge-level graph: select edges for the circuit using `greedy`, `greedy_abs`, `top_n`, `top_n_abs`, or `none`; prunes dead nodes. |
+| **`select_circuit_nodes`** | Node-level graph: select nodes for the circuit using `top_n` or `top_n_abs`. |
+| **`select_circuit_neurons`** | NeuronGraph: select neurons for the circuit using `top_n` or `top_n_abs`; supports per-layer and two-step (nodes first, then neurons). |
+
+### Parameters (common)
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `graph` | Graph \| NeuronGraph | Attributed graph |
+| `selection_method` | str | See selection methods per function below. |
+| `log` | logging.Logger \| None | Logger for progress messages; if None, uses print. Default: None. |
+
+### Selection methods (per function)
+
+| Function | `selection_method` values |
+|----------|---------------------------|
+| `select_circuit_edges` | `'greedy'`, `'greedy_abs'`, `'top_n'`, `'top_n_abs'`, `'none'` |
+| `select_circuit_nodes` | `'top_n'`, `'top_n_abs'` |
+| `select_circuit_neurons` | `'top_n'`, `'top_n_abs'` |
+
+### `select_circuit_neurons` (special parameters)
+
+Neuron selection uses a two-step process: first select nodes, then select neurons within those nodes.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `n_neurons` | int | Number of neurons to keep. If `is_per_layer=True`, this many per MLP layer; otherwise, total across the circuit. |
+| `n_nodes_as_first_step_for_neurons` | int | In the first step, keep this many top-scored nodes (attention + MLP). Neurons are then selected only within those nodes. |
+| `is_per_layer` | bool | If True, select `n_neurons` per MLP layer (`apply_topn_neurons_per_layer`). If False, select `n_neurons` total across the circuit (`apply_topn_only_neurons`). |
+
+### Example
+
+```python
+from plms_repeats_circuits.EAP.circuit_selection import select_circuit_edges, select_circuit_nodes
+
+# Edges: keep top 100 by absolute score
+select_circuit_edges(graph, "top_n_abs", n_edges=100, log=logging.getLogger())
+
+# Nodes: keep top n
+select_circuit_nodes(graph, "top_n_abs", n_nodes=50, log=logging.getLogger())
+```
+
+---
+
 ## ablations.py
 
 Computes mean activations for use as alternative “corrupted” baselines (mean ablation instead of patching with corrupted inputs).
