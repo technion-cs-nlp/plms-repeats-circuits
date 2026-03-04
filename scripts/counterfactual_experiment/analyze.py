@@ -28,17 +28,21 @@ def discover_files(input_dir: Path) -> Tuple[Dict[str, Path], Dict[str, Path]]:
     """Discover counterfactual result files; separate main vs baseline."""
     main_files = {}
     baseline_files = {}
-    for csv_file in input_dir.rglob("*.csv"):
+    # Sort patterns by length descending so specific patterns (e.g. blosum-opposite)
+    # match before shorter ones (e.g. blosum).
+    sorted_baseline = sorted(BASELINE_METHOD_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
+    sorted_main = sorted(MAIN_METHOD_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
+    for csv_file in sorted(input_dir.rglob("*.csv")):
         fn = csv_file.name
-        for pattern, display_name in BASELINE_METHOD_PATTERNS.items():
+        for pattern, display_name in sorted_baseline:
             if pattern in fn:
                 baseline_files[display_name] = csv_file
                 break
-    for csv_file in input_dir.rglob("*.csv"):
+    for csv_file in sorted(input_dir.rglob("*.csv")):
         if csv_file in baseline_files.values():
             continue
         fn = csv_file.name
-        for pattern, display_name in MAIN_METHOD_PATTERNS.items():
+        for pattern, display_name in sorted_main:
             if pattern in fn:
                 main_files[display_name] = csv_file
                 break

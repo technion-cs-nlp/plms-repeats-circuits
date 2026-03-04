@@ -211,7 +211,7 @@ def main():
                         help="Repeat types to process")
     parser.add_argument("--eval_methods", nargs="+", required=False, default=["all"],
                         help="Methods to run in evaluate step. Use 'all' for all methods, or list specific names e.g. mask blosum50")
-    parser.add_argument("--filter_methods", nargs="+", default=["mask", "blosum100", "blosum-opposite50", "permutation"],
+    parser.add_argument("--filter_methods", nargs="+", default=["mask", "blosum", "blosum-opposite50", "permutation"],
                         help="Methods for filter intersection")
     parser.add_argument("--main_only", action="store_true", help="Run only main experiments (no baseline)")
     parser.add_argument("--random_seed", type=int, default=42)

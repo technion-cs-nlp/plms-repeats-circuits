@@ -60,9 +60,8 @@ These CSVs are produced by the evaluation experiment filter step.
 # Full pipeline (evaluate → filter → analyze) for ESM3
 python scripts/counterfactual_experiment/run.py --model_type esm3
 
-# Evaluate only for ESM-C (only BLOSUM 100% method — counterfactual analysis was run on ESM3 only;
-# ESM-C uses blosum solely to produce circuit discovery datasets)
-python scripts/counterfactual_experiment/run.py --model_type esm-c --steps evaluate --eval_methods blosum
+# ESM-C uses blosum solely to produce circuit discovery datasets; analysis on all counterfactuals was produced only for ESM3, then we chose blosum.
+python scripts/counterfactual_experiment/run.py --model_type esm-c --steps evaluate filter --eval_methods blosum --filter_methods blosum
 
 # Evaluate only
 python scripts/counterfactual_experiment/run.py --model_type esm3 --steps evaluate
