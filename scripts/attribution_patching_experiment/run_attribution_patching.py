@@ -23,7 +23,6 @@ import csv
 import traceback
 import sys
 import math
-import random 
 import torch
 from dataclasses import dataclass
 import uuid
@@ -54,48 +53,8 @@ class FindNeuronsCircuitsTwoStepsArgs:
     max_performance_threshold_neurons: float
     two_steps_neuron_circuit_node_circuit_list_sizes: list[float]
 
-def assign_random_scores_for_edges(g):
-    logging.info("Entering assign_random_scores_for_edges")
-    for edge in g.edges.values():
-        # random float number between 0 and 1
-        score = random.random()
-        edge.score = score 
-    logging.info("Exiting assign_random_scores_for_edges")
-
-def assign_permuted_scores(g, graph_type="edges"):
-    logging.info("Assigning permuted scores as a random baseline")
-
-    if graph_type == "edges":
-        # Step 1: Collect all existing scores
-        original_scores = [edge.score for edge in g.edges.values()]
-        
-        # Step 2: Shuffle (permute) them
-        random.shuffle(original_scores)
-
-        # Step 3: Reassign permuted scores back to edges
-        for edge, shuffled_score in zip(g.edges.values(), original_scores):
-            edge.score = shuffled_score
-    else:
-        all_nodes = list(g.nodes.values())
-        scored_nodes = [node for node in all_nodes if node.score is not None]
-        unscored_nodes = [node for node in all_nodes if node.score is None]
-
-        if scored_nodes:
-            original_scores = [node.score for node in scored_nodes]
-            random.shuffle(original_scores)
-            for node, shuffled_score in zip(scored_nodes, original_scores):
-                node.score = shuffled_score
-        else:
-            logging.warning("No nodes with existing scores to permute.")
-
-    logging.info("Permutation-based random scores assigned")
-
-
-
 def load_graph_and_perform_attribution_patching_if_needed(
-    experiment_name, output_dir, train_df, model, device, train_loss, attribution_patching_method, edge_abs_score, aggregation_method, circuit_json_path, EAP_IG_steps, batch_size, graph_type="edges",
-    save_scores_per_example_path: Path=None,
-    save_scores_per_example_with_clean_id_names: bool=False,
+    experiment_name, output_dir, train_df, model, device, train_loss, attribution_patching_method, abs_score, aggregation_method, circuit_json_path, EAP_IG_steps, batch_size, graph_type="edges",
     neurons_graph: bool=False,
     all_examples_scores_npy_path: str=None
 ):
@@ -134,19 +93,12 @@ def load_graph_and_perform_attribution_patching_if_needed(
         logging.info("Performing attribution patching.")
         train_ds = EAPDataset(train_df)
         train_dataloader = train_ds.to_dataloader(batch_size)
-        shuffle = False
-        ap_method = attribution_patching_method
-        if attribution_patching_method == "EAP_shuffle":
-            shuffle = True
-            ap_method = "EAP"
         attribute(
             model=model, graph=g, dataloader=train_dataloader, metric=train_loss, 
-            device=device, aggregation=aggregation_method, method=ap_method, 
-            quiet=False, abs_per_pos=edge_abs_score, are_clean_logits_needed=False, eap_ig_steps=EAP_IG_steps, 
+            device=device, aggregation=aggregation_method, method=attribution_patching_method, 
+            quiet=False, abs_per_pos=abs_score, are_clean_logits_needed=False, eap_ig_steps=EAP_IG_steps, 
             all_examples_scores_npy_path=all_examples_scores_npy_path
         )
-        if shuffle: 
-            assign_permuted_scores(g, graph_type=graph_type)
 
         logging.info("Attribution patching completed.")
         g.to_json(file_path)
@@ -794,7 +746,7 @@ def run_experiment(
     attribution_patching_method,
     post_attribution_patching_processing,
     device,
-    edge_abs_score,
+    abs_score,
     aggregation_method,
     circuit_json_path,
     EAP_IG_steps,
@@ -804,8 +756,6 @@ def run_experiment(
     search_min_circuit:SearchMinCircuitAboveThreshold=None,
     save_cross_task_faithfulness_args: CrossTaskFaithfulnessArgs=None,
     graph_type="nodes",
-    save_scores_per_example_path: Path=None,
-    save_scores_per_example_with_clean_id_names: bool=False,
     neurons_graph: bool=False,
     find_neurons_circuits_two_steps_args: FindNeuronsCircuitsTwoStepsArgs=None,
     all_examples_scores_npy_path: str=None,
@@ -816,10 +766,8 @@ def run_experiment(
         raise ValueError("model is None")
    
     g = load_graph_and_perform_attribution_patching_if_needed(experiment_name=experiment_name, output_dir=output_dir, train_df=train_df, model=model, device=device, 
-                                                              train_loss=train_loss, attribution_patching_method=attribution_patching_method, edge_abs_score=edge_abs_score,
+                                                              train_loss=train_loss, attribution_patching_method=attribution_patching_method, abs_score=abs_score,
                                                               aggregation_method=aggregation_method, circuit_json_path=circuit_json_path, EAP_IG_steps=EAP_IG_steps, batch_size=batch_size, graph_type=graph_type, 
-                                                              save_scores_per_example_path=save_scores_per_example_path,
-                                                              save_scores_per_example_with_clean_id_names=save_scores_per_example_with_clean_id_names,
                                                               neurons_graph=neurons_graph,
                                                               all_examples_scores_npy_path=all_examples_scores_npy_path)
 
@@ -948,8 +896,8 @@ def main():
             "--attribution_patching_method", 
             type=str, 
             default="EAP", 
-            choices=["EAP", "EAP_shuffle", "EAP-IG"],
-            help="Choose which method to perform for attribution patching. Options: 'EAP', 'EAP_shuffle', 'EAP-IG' (same as EAP but with shuffled scores as a random baseline).")
+            choices=["EAP", "EAP-IG"],
+            help="Attribution method: 'EAP' or 'EAP-IG'.")
 
         parser.add_argument("--post_attribution_patching_processing", type=str, default="greedy_abs", help="choose greedy_abs/greedy/top_n/ top_n_abs")
 
@@ -965,7 +913,7 @@ def main():
         parser.add_argument("--metric", type=str, default="logit_diff", help="choose logit_diff/log prob")
 
         parser.add_argument(
-            "--edge_abs_score",
+            "--abs_score",
             action="store_true",
             help="If set, use the absolute value of the score.")
 
@@ -1083,19 +1031,6 @@ def main():
             help= "Type of graph to use for the experiment. Choose from: 'nodes', 'edges' (default: 'nodes')."
         )
         parser.add_argument(
-            "--save_scores_per_example",
-            action="store_true",
-            help="Save scores per node.",
-            default=False
-        )
-
-        parser.add_argument(
-            "--save_scores_per_example_with_clean_id_names",
-            action="store_true",
-            help="Save scores per node with clean id names.",
-            default=False
-        )
-        parser.add_argument(
             "--neurons_graph",
             action="store_true",
             help="Use neurons graph.",
@@ -1152,11 +1087,6 @@ def main():
         args = parser.parse_args()
         if args.neurons_graph and args.graph_type == "edges":
             raise ValueError("Neurons graph is not supported for edges graph.")
-        if args.save_scores_per_example and( args.graph_type == "edges" or args.neurons_graph):
-            raise ValueError("Save scores per example is not supported for edges graph or neurons graph.")
-
-        if args.neurons_graph and  args.attribution_patching_method == "EAP_shuffle":
-            raise ValueError("EAP_shuffle is not supported for neurons graph.")
 
         if args.neurons_graph and args.find_neurons_circuits_two_steps and args.is_cross_task_faithfulness:
             raise ValueError("Find neurons circuits in two steps is not supported for cross-task faithfulness evaluation.")
@@ -1174,7 +1104,7 @@ def main():
 
         circuit_id = str(uuid.uuid4())
 
-        experiment_name = f"circuit{circuit_id}_{args.task_name}_n{args.total_n_samples}_random_state{args.random_state}_train_ratio{args.train_ratio}_{args.attribution_patching_method}_{args.post_attribution_patching_processing}_agg{args.aggregation_method}_abs{args.edge_abs_score}_metric{args.metric}"
+        experiment_name = f"circuit{circuit_id}_{args.task_name}_n{args.total_n_samples}_random_state{args.random_state}_train_ratio{args.train_ratio}_{args.attribution_patching_method}_{args.post_attribution_patching_processing}_agg{args.aggregation_method}_abs{args.abs_score}_metric{args.metric}"
  
         log_file = Path(output_dir) / f'{experiment_name}.log'
         logging.basicConfig(
@@ -1182,10 +1112,6 @@ def main():
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s")
 
-        save_scores_per_example_path = None
-        if args.save_scores_per_example and args.graph_type == "nodes":
-            save_scores_per_example_path = Path(output_dir) / f'{experiment_name}_scores_per_node.csv'
-        
         if args.save_scores_per_example_npy:
             save_scores_per_example_npy_path = Path(output_dir) / f'{experiment_name}_scores_per_example.npy'
         else:
@@ -1296,7 +1222,7 @@ def main():
             attribution_patching_method=args.attribution_patching_method, 
             post_attribution_patching_processing=args.post_attribution_patching_processing,
             device=device, 
-            edge_abs_score=args.edge_abs_score, 
+            abs_score=args.abs_score, 
             aggregation_method=args.aggregation_method,
             circuit_json_path=args.circuit_json_path, 
             EAP_IG_steps=args.EAP_IG_steps, 
@@ -1306,8 +1232,6 @@ def main():
             search_min_circuit=search_min_circuit,  # Pass the search_min_circuit parameter
             save_cross_task_faithfulness_args=cross_task_faithfulness_args,
             graph_type=args.graph_type,
-            save_scores_per_example_path=save_scores_per_example_path,
-            save_scores_per_example_with_clean_id_names=args.save_scores_per_example_with_clean_id_names,
             neurons_graph=args.neurons_graph,
             find_neurons_circuits_two_steps_args=find_neurons_circuits_two_steps_args,
             all_examples_scores_npy_path=save_scores_per_example_npy_path,
