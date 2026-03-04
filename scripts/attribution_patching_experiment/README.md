@@ -7,7 +7,7 @@ Run circuit discovery via EAP/EAP-IG on a protein repeat prediction task. The sc
 1. Load CSV dataset and create induction task (clean vs corrupted, masked position, labels).
 2. Split into train/test.
 3. Build graph from model, run attribution (EAP or EAP-IG) on train.
-4. For each circuit size in `n_edges_in_circuit_list`, select circuit and evaluate faithfulness on test.
+4. For each circuit size in `n_components_in_circuit_list`, select circuit and evaluate faithfulness on test.
 5. Optionally: binary search for minimal circuit, two-step neuron search, or cross-task faithfulness.
 
 ## Input
@@ -56,8 +56,8 @@ Run circuit discovery via EAP/EAP-IG on a protein repeat prediction task. The sc
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--graph_type` | str | edges | `edges` or `nodes`. |
-| `--post_attribution_patching_processing` | str | greedy_abs | How to select circuit. Edges: `greedy`, `greedy_abs`, `top_n`, `top_n_abs`, `none`. Nodes/neurons: `top_n`, `top_n_abs`. |
-| `--n_edges_in_circuit_list` | float, nargs='+' | [0.001, 0.002, …] | Circuit sizes to evaluate. Values ≥1 = absolute count; <1 = fraction of total. |
+| `--circuit_selection_method` | str | greedy_abs | How to select circuit. Edges: `greedy`, `greedy_abs`, `top_n`, `top_n_abs`, `none`. Nodes/neurons: `top_n`, `top_n_abs`. |
+| `--n_components_in_circuit_list` | float, nargs='+' | [0.001, 0.002, …] | Circuit sizes to evaluate. Values ≥1 = absolute count; <1 = fraction of total. |
 
 ---
 
@@ -66,7 +66,7 @@ Run circuit discovery via EAP/EAP-IG on a protein repeat prediction task. The sc
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--circuit_json_path` | str | None | Load/save circuit from JSON. If provided and file exists, skips attribution. |
-| `--save_scores_per_example_npy` | flag | False | Save per-example scores to NPY (via `all_examples_scores_npy_path`). |
+| `--save_scores_per_example_npy` | flag | False | Save per-example scores to NPY: `{experiment_name}_scores_per_example.npy`. |
 
 ---
 
@@ -75,7 +75,7 @@ Run circuit discovery via EAP/EAP-IG on a protein repeat prediction task. The sc
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--neurons_graph` | flag | False | Use NeuronGraph (neuron-level circuit). |
-| `--find_neurons_circuits_two_steps` | flag | False | Two-step: first select nodes, then neurons within those nodes. Requires `post_attribution_patching_processing` in {top_n, top_n_abs}. |
+| `--find_neurons_circuits_two_steps` | flag | False | Two-step: first select nodes, then neurons within those nodes. Requires `circuit_selection_method` in {top_n, top_n_abs}. |
 | `--min_performance_threshold_neurons` | float | 0.89 | Min faithfulness for neuron circuit (two-step). |
 | `--max_performance_threshold_neurons` | float | 0.9 | Max faithfulness for neuron circuit (two-step). |
 | `--is_per_layer_neurons` | flag | False | Select neurons per MLP layer (two-step). |
@@ -122,8 +122,8 @@ python run_attribution_patching.py \
   --task_name synthetic_mask \
   --model_type esm3 \
   --graph_type nodes \
-  --post_attribution_patching_processing top_n_abs \
-  --n_edges_in_circuit_list 0.01 0.05 0.1 0.5 1.0 \
+  --circuit_selection_method top_n_abs \
+  --n_components_in_circuit_list 0.01 0.05 0.1 0.5 1.0 \
   --attribution_patching_method EAP-IG \
   --EAP_IG_steps 5
 ```

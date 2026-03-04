@@ -186,13 +186,13 @@ def validate_cross_task_faithfulness_input_args_and_build_data_class(args) -> Cr
     return cross_task_faithfulness_args
 
 def search_min_circuit_binary_search(circuit_id, task_name, model, metric_evaluation, device, g:Graph, 
-                                     post_attribution_patching_processing, 
+                                     circuit_selection_method, 
                                      search_min_circuit:SearchMinCircuitAboveThreshold, 
                                      results, clean_baseline, corrupted_baseline, test_dataloader, graph_type="edges"):
     
     best_circuits_csv = search_min_circuit.global_csv_circuit_information
     # Add at the beginning of the function
-    total = len(g.edges) if graph_type == "edges" else g.count_total_nodes()
+    total = g.count_total_edges() if graph_type == "edges" else g.count_total_nodes()
     csv_dir = os.path.dirname(best_circuits_csv)
     if csv_dir and not os.path.exists(csv_dir):
         os.makedirs(csv_dir, exist_ok=True)
@@ -203,7 +203,7 @@ def search_min_circuit_binary_search(circuit_id, task_name, model, metric_evalua
             raise ValueError("there isnt a way to compute valid range for finding best circuit")
         sorted_results = sorted(results, key=lambda x: x[0])
         start = 0
-        end = len(g.edges.values()) if graph_type == "edges" else g.count_total_nodes()
+        end = g.count_total_edges() if graph_type == "edges" else g.count_total_nodes()
         start_performance = 0.0
         real_n = None
         for i, (n, curr_real_n, performance) in enumerate(sorted_results):
@@ -241,9 +241,9 @@ def search_min_circuit_binary_search(circuit_id, task_name, model, metric_evalua
             logging.info(f"Search best circuit: Evaluating circuit for input edge midpoint: {n}, start: {start}, end: {end}")
             
             if graph_type == "edges":
-                select_circuit_edges(graph=g, selection_method=post_attribution_patching_processing, n_edges=n, log=logging.getLogger())
+                select_circuit_edges(graph=g, selection_method=circuit_selection_method, n_edges=n, log=logging.getLogger())
             else:
-                select_circuit_nodes(graph=g, selection_method=post_attribution_patching_processing, n_nodes=n, log=logging.getLogger())
+                select_circuit_nodes(graph=g, selection_method=circuit_selection_method, n_nodes=n, log=logging.getLogger())
             empty_circuit = not g.nodes['logits'].in_graph
             
             if not empty_circuit:
@@ -307,23 +307,23 @@ def search_min_circuit_binary_search(circuit_id, task_name, model, metric_evalua
         writer = csv.writer(csv_file)
         if csv_file.tell() == 0:  # Check if the file pointer is at the start (file is empty)
             if graph_type == "edges":
-                writer.writerow(["circuit_id", "task_name", "post_attribution_patching_processing",
+                writer.writerow(["circuit_id", "task_name", "circuit_selection_method",
                             "n_edges", "pct_n_edges", "real_n_edges", "real_pct_n_edges", "faithfulness_by_mean"])
             else:
-                writer.writerow(["circuit_id", "task_name", "post_attribution_patching_processing",
+                writer.writerow(["circuit_id", "task_name", "circuit_selection_method",
                             "n_nodes", "pct_n_nodes", "real_n_nodes", "real_pct_n_nodes", "faithfulness_by_mean"])
         
         pct_n = res_n / total if res_n is not None else None
         real_pct_n_edges = res_real / total if res_real is not None else None
         
-        writer.writerow([circuit_id, task_name, post_attribution_patching_processing, 
+        writer.writerow([circuit_id, task_name, circuit_selection_method, 
                        res_n, pct_n, res_real, real_pct_n_edges, res_performance])
     
     return res_n, res_real, res_performance
 
 
 def search_min_circuit_binary_search_neurons(circuit_id, task_name, model, metric_evaluation, device, g:NeuronGraph, 
-                                     post_attribution_patching_processing, 
+                                     circuit_selection_method, 
                                      search_min_circuit:SearchMinCircuitAboveThreshold, 
                                      results, clean_baseline, corrupted_baseline, test_dataloader,
                                      is_per_layer, n_nodes_as_first_step_for_neurons,
@@ -386,7 +386,7 @@ def search_min_circuit_binary_search_neurons(circuit_id, task_name, model, metri
             n = (start + end) // 2
             logging.info(f"Search best circuit (neurons): Evaluating circuit for input neurons midpoint: {n}, start: {start}, end: {end}, is_per_layer: {is_per_layer}")
             
-            select_circuit_neurons(graph=g, selection_method=post_attribution_patching_processing, 
+            select_circuit_neurons(graph=g, selection_method=circuit_selection_method, 
                                           n_neurons=n, n_nodes_as_first_step_for_neurons=n_nodes_as_first_step_for_neurons,
                                           is_per_layer=is_per_layer, log=logging.getLogger())
 
@@ -436,7 +436,7 @@ def search_min_circuit_binary_search_neurons(circuit_id, task_name, model, metri
 
     # Re-evaluate the final circuit to get all metrics
     
-    select_circuit_neurons(graph=g, selection_method=post_attribution_patching_processing, 
+    select_circuit_neurons(graph=g, selection_method=circuit_selection_method, 
                                   n_neurons=res_n, n_nodes_as_first_step_for_neurons=n_nodes_as_first_step_for_neurons,
                                   is_per_layer=is_per_layer, log=logging.getLogger())
     
@@ -460,13 +460,13 @@ def search_min_circuit_binary_search_neurons(circuit_id, task_name, model, metri
     with open(best_circuits_csv, "a", newline="") as csv_file:
         writer = csv.writer(csv_file)
         if csv_file.tell() == 0:  # Check if the file pointer is at the start (file is empty)
-            writer.writerow(["circuit_id", "task_name", "post_attribution_patching_processing",
+            writer.writerow(["circuit_id", "task_name", "circuit_selection_method",
                         "n_nodes_as_first_step_for_neurons", 
                         "n_neurons", "is_per_layer", "pct_n_neurons_per_layer",
                         "tot_n_neurons", "tot_pct_n_neurons",
                         "circuit_size", "circuit_size_pct", "num_mlp_nodes", "faithfulness_by_mean"])
         
-        writer.writerow([circuit_id, task_name, post_attribution_patching_processing,
+        writer.writerow([circuit_id, task_name, circuit_selection_method,
                        n_nodes_as_first_step_for_neurons, res_n, is_per_layer, pct_n_neurons_per_layer,
                        tot_n_neurons, tot_pct_n_neurons,
                        circuit_size_as_neurons, circuit_size_as_neurons_pct, num_mlp_nodes, res_performance])
@@ -475,7 +475,7 @@ def search_min_circuit_binary_search_neurons(circuit_id, task_name, model, metri
 
 
 def _find_circuit_nodes_as_first_step_for_neurons(neurons_graph,output_dir, model, device, experiment_name, n_edges_or_nodes_in_circuit_list,
-    post_attribution_patching_processing, test_df, batch_size, metric_evaluation, clean_baseline, corrupted_baseline, min_performance_threshold_neurons, 
+    circuit_selection_method, test_df, batch_size, metric_evaluation, clean_baseline, corrupted_baseline, min_performance_threshold_neurons, 
     max_performance_threshold_neurons, circuit_id, task_name):
 
     if not isinstance(neurons_graph, NeuronGraph):
@@ -508,7 +508,7 @@ def _find_circuit_nodes_as_first_step_for_neurons(neurons_graph,output_dir, mode
             logging.info(f"Evaluating circuit for input edge/node value: {n_input}")
             n = get_edges_or_nodes_number(n_input, total)
             logging.info(f"Computed number of edges/nodes to use: {n}")
-            select_circuit_nodes(graph=g, selection_method=post_attribution_patching_processing, n_nodes=n, log=logging.getLogger())
+            select_circuit_nodes(graph=g, selection_method=circuit_selection_method, n_nodes=n, log=logging.getLogger())
 
             empty_circuit = not g.nodes['logits'].in_graph
             if empty_circuit and n!=0:
@@ -540,14 +540,14 @@ def _find_circuit_nodes_as_first_step_for_neurons(neurons_graph,output_dir, mode
         try:
             logging.info(f"Searching best circuit for nodes as first step for neurons with min_performance_threshold: {min_performance_threshold_neurons}, max_performance_threshold: {max_performance_threshold_neurons}")
             res_n, res_real, res_performance = search_min_circuit_binary_search(circuit_id=circuit_id, task_name=task_name, model=model, metric_evaluation=metric_evaluation, device=device, g=g, 
-                                            post_attribution_patching_processing=post_attribution_patching_processing, 
+                                            circuit_selection_method=circuit_selection_method, 
                                             search_min_circuit=search_min_circuit, 
                                             results=results, clean_baseline=clean_baseline, corrupted_baseline=corrupted_baseline, test_dataloader=test_dataloader, graph_type="nodes")
             logging.info(f"Search best circuit for nodes as first step for neurons: res_n: {res_n}, res_real: {res_real}, res_performance: {res_performance}")
                         
             
             g.set_all_edges_in_graph(in_graph=False)
-            select_circuit_nodes(graph=g, selection_method=post_attribution_patching_processing, n_nodes=res_n, log=logging.getLogger())
+            select_circuit_nodes(graph=g, selection_method=circuit_selection_method, n_nodes=res_n, log=logging.getLogger())
             logging.info(f"best circuit for nodes as first step for neurons: Attention nodes in first step for neurons graph: {g.count_attention_nodes(filter_by_in_graph=True)}, mlp nodes in first step for neurons graph: {g.count_mlp_nodes(filter_by_in_graph=True)}")
             return res_n, res_real, res_performance, g.count_attention_nodes(filter_by_in_graph=True), g.count_mlp_nodes(filter_by_in_graph=True)
 
@@ -556,7 +556,7 @@ def _find_circuit_nodes_as_first_step_for_neurons(neurons_graph,output_dir, mode
             raise ValueError(f"An error occured while trying to perform search_min_circuit_binary_search in _find_circuit_nodes_as_first_step_for_neurons:{e}")
 
 def _find_circuit_neurons_as_second_step_for_neurons(neurons_graph,output_dir, model, device, experiment_name,
- n_neurons_in_circuit_list, is_per_layer, n_nodes_as_first_step_for_neurons, n_attention_nodes_as_first_step_for_neurons, n_mlp_nodes_as_first_step_for_neurons, post_attribution_patching_processing, test_df, batch_size, 
+ n_neurons_in_circuit_list, is_per_layer, n_nodes_as_first_step_for_neurons, n_attention_nodes_as_first_step_for_neurons, n_mlp_nodes_as_first_step_for_neurons, circuit_selection_method, test_df, batch_size, 
  metric_evaluation, clean_baseline, corrupted_baseline, circuit_id, task_name, search_min_circuit):
 
     #here we are in the second step for neurons, where we already chose attention heads and mlp nodes in the first step
@@ -590,7 +590,7 @@ def _find_circuit_neurons_as_second_step_for_neurons(neurons_graph,output_dir, m
 
             pct_per_layer = n / neurons_graph.n_neurons_per_mlp if is_per_layer else None
 
-            select_circuit_neurons(graph=neurons_graph, selection_method=post_attribution_patching_processing, n_neurons=n, n_nodes_as_first_step_for_neurons=n_nodes_as_first_step_for_neurons,
+            select_circuit_neurons(graph=neurons_graph, selection_method=circuit_selection_method, n_neurons=n, n_nodes_as_first_step_for_neurons=n_nodes_as_first_step_for_neurons,
              is_per_layer=is_per_layer, log=logging.getLogger())
 
             empty_circuit = not neurons_graph.nodes['logits'].in_graph
@@ -633,7 +633,7 @@ def _find_circuit_neurons_as_second_step_for_neurons(neurons_graph,output_dir, m
         try:
 
            _, _ = search_min_circuit_binary_search_neurons(circuit_id=circuit_id, task_name=task_name, model=model, metric_evaluation=metric_evaluation, device=device, g=neurons_graph, 
-                                            post_attribution_patching_processing=post_attribution_patching_processing, 
+                                            circuit_selection_method=circuit_selection_method, 
                                             search_min_circuit=search_min_circuit, 
                                             results=results, clean_baseline=clean_baseline, corrupted_baseline=corrupted_baseline, test_dataloader=test_dataloader,
                                             is_per_layer=is_per_layer, n_nodes_as_first_step_for_neurons=n_nodes_as_first_step_for_neurons,
@@ -653,7 +653,7 @@ def find_neurons_circuits_two_steps(
     experiment_name,
     n_edges_or_nodes_in_circuit_list,
     is_per_layer,
-    post_attribution_patching_processing,
+    circuit_selection_method,
     test_df,
     batch_size,
     metric_evaluation,
@@ -667,7 +667,7 @@ def find_neurons_circuits_two_steps(
     two_steps_neuron_circuit_node_circuit_list_sizes,
 ):
     logging.info("=== Starting two-step neuron circuit search ===")
-    logging.info(f"Processing type={post_attribution_patching_processing}, "
+    logging.info(f"Processing type={circuit_selection_method}, "
                  f"per-layer={is_per_layer}, circuit_id={circuit_id}")
 
     # --- STEP 1: node-level selection ---
@@ -684,7 +684,7 @@ def find_neurons_circuits_two_steps(
         device=device,
         experiment_name=experiment_name,
         n_edges_or_nodes_in_circuit_list=two_steps_neuron_circuit_node_circuit_list_sizes,
-        post_attribution_patching_processing=post_attribution_patching_processing,
+        circuit_selection_method=circuit_selection_method,
         test_df=test_df,
         batch_size=batch_size,
         metric_evaluation=metric_evaluation,
@@ -698,11 +698,11 @@ def find_neurons_circuits_two_steps(
 
     # --- Validation sanity check (fixed precedence bug) ---
     if res_n != res_real and (
-        post_attribution_patching_processing in {"top_n", "top_n_abs"}
+        circuit_selection_method in {"top_n", "top_n_abs"}
     ):
         raise RuntimeError(
             f"Unexpected mismatch: res_n ({res_n}) != res_real ({res_real}) "
-            f"under mode {post_attribution_patching_processing}"
+            f"under mode {circuit_selection_method}"
         )
 
     if res_real is None:
@@ -721,7 +721,7 @@ def find_neurons_circuits_two_steps(
         n_nodes_as_first_step_for_neurons=res_real,
         n_attention_nodes_as_first_step_for_neurons=n_attention_nodes_as_first_step_for_neurons,
         n_mlp_nodes_as_first_step_for_neurons=n_mlp_nodes_as_first_step_for_neurons,
-        post_attribution_patching_processing=post_attribution_patching_processing,
+        circuit_selection_method=circuit_selection_method,
         test_df=test_df,
         batch_size=batch_size,
         metric_evaluation=metric_evaluation,
@@ -744,7 +744,7 @@ def run_experiment(
     metric_evaluation,
     n_edges_or_nodes_in_circuit_list,
     attribution_patching_method,
-    post_attribution_patching_processing,
+    circuit_selection_method,
     device,
     abs_score,
     aggregation_method,
@@ -771,7 +771,7 @@ def run_experiment(
                                                               neurons_graph=neurons_graph,
                                                               all_examples_scores_npy_path=all_examples_scores_npy_path)
 
-    total = len(g.edges) if graph_type == "edges" else g.count_total_nodes()
+    total = g.count_total_edges() if graph_type == "edges" else g.count_total_nodes()
     test_ds = EAPDataset(test_df)
     test_dataloader = test_ds.to_dataloader(batch_size)
 
@@ -790,7 +790,7 @@ def run_experiment(
             experiment_name=experiment_name,
             n_edges_or_nodes_in_circuit_list=n_edges_or_nodes_in_circuit_list,
             is_per_layer= find_neurons_circuits_two_steps_args.is_per_layer,
-            post_attribution_patching_processing=post_attribution_patching_processing,
+            circuit_selection_method=circuit_selection_method,
             test_df=test_df,
             batch_size=batch_size,
             metric_evaluation=metric_evaluation,
@@ -822,9 +822,9 @@ def run_experiment(
             n = get_edges_or_nodes_number(n_input, total)
             logging.info(f"Computed number of edges/nodes to use: {n}")
             if graph_type == "edges":
-                select_circuit_edges(graph=g, selection_method=post_attribution_patching_processing, n_edges=n, log=logging.getLogger())
+                select_circuit_edges(graph=g, selection_method=circuit_selection_method, n_edges=n, log=logging.getLogger())
             else:
-                select_circuit_nodes(graph=g, selection_method=post_attribution_patching_processing, n_nodes=n, log=logging.getLogger())
+                select_circuit_nodes(graph=g, selection_method=circuit_selection_method, n_nodes=n, log=logging.getLogger())
 
             empty_circuit = not g.nodes['logits'].in_graph
             if empty_circuit and n!=0:
@@ -861,7 +861,7 @@ def run_experiment(
     if search_min_circuit is not None:
         try:
             _ ,_ ,_ = search_min_circuit_binary_search(circuit_id=circuit_id, task_name=task_name, model=model, metric_evaluation=metric_evaluation, device=device, g=g, 
-                                            post_attribution_patching_processing=post_attribution_patching_processing, 
+                                            circuit_selection_method=circuit_selection_method, 
                                             search_min_circuit=search_min_circuit, 
                                             results=results, clean_baseline=clean_baseline, corrupted_baseline=corrupted_baseline, test_dataloader=test_dataloader, graph_type=graph_type)
         except Exception as e:
@@ -899,10 +899,10 @@ def main():
             choices=["EAP", "EAP-IG"],
             help="Attribution method: 'EAP' or 'EAP-IG'.")
 
-        parser.add_argument("--post_attribution_patching_processing", type=str, default="greedy_abs", help="choose greedy_abs/greedy/top_n/ top_n_abs")
+        parser.add_argument("--circuit_selection_method", type=str, default="greedy_abs", help="choose greedy_abs/greedy/top_n/ top_n_abs")
 
         parser.add_argument(
-            "--n_edges_in_circuit_list", 
+            "--n_components_in_circuit_list", 
             type=float, 
             nargs='+', 
             default=[0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0],
@@ -1092,9 +1092,9 @@ def main():
             raise ValueError("Find neurons circuits in two steps is not supported for cross-task faithfulness evaluation.")
 
         if args.neurons_graph and args.find_neurons_circuits_two_steps and \
-            args.post_attribution_patching_processing not in {"top_n", "top_n_abs"}:
+            args.circuit_selection_method not in {"top_n", "top_n_abs"}:
                 raise ValueError(
-                    "Two-step neurons mode requires post_attribution_patching_processing ∈ {top_n, top_n_abs}"
+                    "Two-step neurons mode requires circuit_selection_method ∈ {top_n, top_n_abs}"
                 )
 
         
@@ -1104,7 +1104,7 @@ def main():
 
         circuit_id = str(uuid.uuid4())
 
-        experiment_name = f"circuit{circuit_id}_{args.task_name}_n{args.total_n_samples}_random_state{args.random_state}_train_ratio{args.train_ratio}_{args.attribution_patching_method}_{args.post_attribution_patching_processing}_agg{args.aggregation_method}_abs{args.abs_score}_metric{args.metric}"
+        experiment_name = f"circuit{circuit_id}_{args.task_name}_n{args.total_n_samples}_random_state{args.random_state}_train_ratio{args.train_ratio}_{args.attribution_patching_method}_{args.circuit_selection_method}_agg{args.aggregation_method}_abs{args.abs_score}_metric{args.metric}"
  
         log_file = Path(output_dir) / f'{experiment_name}.log'
         logging.basicConfig(
@@ -1168,8 +1168,8 @@ def main():
             logging.info(f"{arg}: {value}")
 
         supported_post_processing_method = ["greedy_abs", "greedy", "top_n", "top_n_abs", "none"]
-        if not args.post_attribution_patching_processing in supported_post_processing_method:
-            raise ValueError(f"Unsupported post_attribution_patching_processing: {args.post_attribution_patching_processing}.")
+        if not args.circuit_selection_method in supported_post_processing_method:
+            raise ValueError(f"Unsupported circuit_selection_method: {args.circuit_selection_method}.")
 
         supported_metrics = ["logit_diff", "log_prob"]
         if not args.metric in supported_metrics:
@@ -1218,9 +1218,9 @@ def main():
             test_df=test, 
             train_loss=loss,
             metric_evaluation=metric, 
-            n_edges_or_nodes_in_circuit_list=args.n_edges_in_circuit_list, 
+            n_edges_or_nodes_in_circuit_list=args.n_components_in_circuit_list, 
             attribution_patching_method=args.attribution_patching_method, 
-            post_attribution_patching_processing=args.post_attribution_patching_processing,
+            circuit_selection_method=args.circuit_selection_method,
             device=device, 
             abs_score=args.abs_score, 
             aggregation_method=args.aggregation_method,
