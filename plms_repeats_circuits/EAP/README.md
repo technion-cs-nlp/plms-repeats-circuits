@@ -1,7 +1,4 @@
-# EAP: Edge Attribution Patching
-
-This module implements **Edge Attribution Patching (EAP)** and **EAP with Integrated Gradients (EAP-IG)** for circuit discovery in protein language models (ESM3, ESM-C). The code is based on [EAP-IG](https://github.com/hannamw/EAP-IG/tree/main).
-
+This module implements **Edge Attribution Patching (EAP)** and **EAP with Integrated Gradients (EAP-IG)** for circuit discovery in protein language models (ESM3, ESM-C). The code is based on [EAP-IG](https://github.com/hannamw/EAP-IG/tree/main). The same methods extend to nodes and neurons (we still call them EAP and EAP-IG), but those operate on nodes/neurons rather than edges. 
 ## Overview
 
 The pipeline typically is:
@@ -53,8 +50,7 @@ Computes attribution scores (EAP and EAP-IG) for edges, nodes, or neurons.
 ```python
 attribute(model, graph, dataloader, metric, device, aggregation='sum',
           method='EAP', quiet=False, abs_per_pos=False, are_clean_logits_needed=False,
-          eap_ig_steps=None, all_examples_scores_csv_path=None, use_clean_id_names=False,
-          all_examples_scores_npy_path=None, use_mean_ablations=False, mean_ablations_dir=None,
+          eap_ig_steps=None, all_examples_scores_npy_path=None, use_mean_ablations=False, mean_ablations_dir=None,
           separate_mask_positions=False)
 ```
 
@@ -62,20 +58,21 @@ attribute(model, graph, dataloader, metric, device, aggregation='sum',
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | HookedESM3 \| HookedESMC | Model to attribute |
-| `graph` | Graph \| NeuronGraph | Graph (edges, nodes, or neurons) |
-| `dataloader` | DataLoader | Batches of (clean, corrupted, masked_positions, labels, clean_id_names) |
-| `metric` | Callable | `metric(logits, clean_logits, masked_positions_tensor, labels_tensor)` → scalar |
-| `device` | torch.device | Device for computation |
-| `aggregation` | str | `'sum'` or `'pos_mean'` over positions |
-| `method` | str | `'EAP'` or `'EAP-IG'` |
-| `eap_ig_steps` | int | IG steps for EAP-IG (default 30) |
-| `all_examples_scores_csv_path` | str | Path to save per-example node scores (nodes only) |
-| `use_clean_id_names` | bool | Use dataset IDs instead of example_0, example_1, … |
-| `all_examples_scores_npy_path` | str | Path to save scores as NPZ (nodes/neurons) |
-| `use_mean_ablations` | bool | Use mean ablation instead of corrupted activations |
-| `mean_ablations_dir` | str | Directory with precomputed mean ablations (`.pt` files) |
-| `separate_mask_positions` | bool | Use separate mean ablations for masked vs non-masked positions |
+| `model` | HookedESM3 \| HookedESMC | Hooked model to attribute (must support forward hooks). |
+| `graph` | Graph \| NeuronGraph | Computational graph to score. Use `Graph` with `GraphType.Edges` or `GraphType.Nodes`, or `NeuronGraph` for neuron-level attribution. |
+| `dataloader` | DataLoader | Batches of `(clean, corrupted, masked_positions, labels, clean_id_names)`. See Dataloader format below. |
+| `metric` | Callable | Objective for attribution. Signature: `metric(logits, clean_logits, masked_positions_tensor, labels_tensor)` → scalar. Gradients flow through this; typically a loss over logits at masked positions (e.g. logit diff, log prob, see plms_repeats_circuits/utils/patching_metrics.py). |
+| `device` | torch.device | Device for model and tensors. |
+| `aggregation` | str | How to aggregate attribution scores across sequence positions, then average over all examples: `'sum'` = sum over positions per example; `'pos_mean'` = mean over positions per example. |
+| `method` | str | `'EAP'` = Edge Attribution Patching (edges) or Attribution Patching (nodes/neurons). `'EAP-IG'` = Integrated Gradients version. |
+| `quiet` | bool | If True, disable tqdm progress bars. Default: False. |
+| `abs_per_pos` | bool | If True, take absolute value of per-position scores before aggregation (magnitude-only importance). Default: False. |
+| `are_clean_logits_needed` | bool | If True, run an extra forward pass to get clean logits and pass them to the metric (e.g. for faithfulness). If False, `clean_logits` is None and the metric must not require it. Default: False. |
+| `eap_ig_steps` | int | Number of interpolation steps for EAP-IG. Higher = more accurate, slower. Default: 30. |
+| `all_examples_scores_npy_path` | str | If set, save per-example attribution scores to this NPZ path (nodes/neurons only; not used for edges). |
+| `use_mean_ablations` | bool | If True, use mean activations as the “corrupted” baseline instead of patching with corrupted inputs. Requires precomputed ablations via `compute_mean_activations_per_node`. |
+| `mean_ablations_dir` | str | Directory with `.pt` files from `compute_mean_activations_per_node`. Required when `use_mean_ablations=True`. |
+| `separate_mask_positions` | bool | When `use_mean_ablations=True`, use different mean activations for masked vs non-masked positions (`exclude_mask` / `only_mask`). Requires ablations computed with those modes. Default: False. |
 
 ### Other utilities
 

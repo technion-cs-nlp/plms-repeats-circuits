@@ -14,7 +14,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from plms_repeats_circuits.utils.protein_similiarity_utils import analyze_repeat_positions, RepeatPositionData
 import os
 import warnings
 from plms_repeats_circuits.utils.esm_utils import load_tokenizer_by_model_type
@@ -463,8 +462,7 @@ aggregation='sum', abs_per_pos=False, are_clean_logits_needed=False):
 
 allowed_aggregations = {'sum', 'pos_mean'}
 def attribute(model: HookedESM3 | HookedESMC, graph: Graph | NeuronGraph, dataloader: DataLoader, metric: Callable[[Tensor], Tensor], device, aggregation='sum',
- method: Union[Literal['EAP', 'EAP-IG']]="EAP", quiet=False, abs_per_pos=False, are_clean_logits_needed=False, eap_ig_steps=None, all_examples_scores_csv_path:str=None,
- use_clean_id_names:bool=False, all_examples_scores_npy_path:str=None, 
+ method: Union[Literal['EAP', 'EAP-IG']]="EAP", quiet=False, abs_per_pos=False, are_clean_logits_needed=False, eap_ig_steps=None, all_examples_scores_npy_path:str=None,
  use_mean_ablations:bool=False, mean_ablations_dir:Optional[str]=None, separate_mask_positions:bool=False):
     
     # Load mean ablations if requested
@@ -486,7 +484,7 @@ def attribute(model: HookedESM3 | HookedESMC, graph: Graph | NeuronGraph, datalo
         elif graph.graph_type == GraphType.Nodes:
             attribute_nodes(model=model, graph=graph, dataloader=dataloader, metric=metric, device=device, aggregation=aggregation, method=method, 
                         quiet=quiet, abs_per_pos=abs_per_pos, are_clean_logits_needed=are_clean_logits_needed, eap_ig_steps=eap_ig_steps, 
-                        all_examples_scores_csv_path=all_examples_scores_csv_path, use_clean_id_names=use_clean_id_names, all_examples_scores_npy_path=all_examples_scores_npy_path)
+                        all_examples_scores_npy_path=all_examples_scores_npy_path)
                        
     
 def attribute_edges(model: HookedESM3, graph: Graph, dataloader: DataLoader, metric: Callable[[Tensor], Tensor], device, aggregation='sum',
@@ -507,18 +505,17 @@ def attribute_edges(model: HookedESM3, graph: Graph, dataloader: DataLoader, met
         edge.score = scores[graph.forward_index(edge.parent, attn_slice=False), graph.backward_index(edge.child, qkv=edge.qkv, attn_slice=False)]*edge.weight
         
 def attribute_nodes(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: DataLoader, metric: Callable[[Tensor], Tensor], device, aggregation='sum',
- method: Union[Literal['EAP', 'EAP-IG']]="EAP", quiet=False, abs_per_pos=False, are_clean_logits_needed=False, eap_ig_steps=None, all_examples_scores_csv_path:str=None, 
- use_clean_id_names:bool=False, all_examples_scores_npy_path:str=None):
+ method: Union[Literal['EAP', 'EAP-IG']]="EAP", quiet=False, abs_per_pos=False, are_clean_logits_needed=False, eap_ig_steps=None, all_examples_scores_npy_path:str=None):
     
     if aggregation not in allowed_aggregations:
         raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
 
     if method == 'EAP':
         scores = get_scores_eap_nodes(model, graph, dataloader, metric, quiet=quiet, device=device, aggregation=aggregation, abs_per_pos=abs_per_pos, are_clean_logits_needed=are_clean_logits_needed, 
-        all_examples_scores_csv_path=all_examples_scores_csv_path, use_clean_id_names=use_clean_id_names, all_examples_scores_npy_path=all_examples_scores_npy_path)
+        all_examples_scores_npy_path=all_examples_scores_npy_path)
     elif method == 'EAP-IG':
         scores = get_scores_eap_ig_nodes(model=model, graph=graph, dataloader=dataloader, metric=metric, device=device, steps=eap_ig_steps, quiet=quiet,aggregation=aggregation, abs_per_pos=abs_per_pos,
-        all_examples_scores_csv_path=all_examples_scores_csv_path, use_clean_id_names=use_clean_id_names, all_examples_scores_npy_path=all_examples_scores_npy_path)
+        all_examples_scores_npy_path=all_examples_scores_npy_path)
     else:
         raise ValueError(f"integrated_gradients must be in ['EAP'], but got {method}")
     
@@ -532,8 +529,7 @@ def attribute_nodes(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: Da
 
 def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, batch_size:int, 
                                  n_pos:int, scores: torch.Tensor, device, detach=True, aggregation='sum', abs_per_pos=False, lengths=None,
-                                 scores_nodes_all_examples:dict=None, node_forward_index_to_name:dict=None, items_until_now:int=0, save_scores_per_node:bool=False,
-                                 clean_id_names=None, use_clean_id_names:bool=False, scores_examples_np_arr:np.ndarray=None, indicies_examples_torch_arr:torch.Tensor=None,
+                                 scores_examples_np_arr:np.ndarray=None, indicies_examples_torch_arr:torch.Tensor=None,
                                  mean_ablations_cache: Optional[dict]=None, masked_positions: Optional[List[List[int]]]=None, 
                                  separate_mask_positions: bool=False):
     
@@ -633,37 +629,6 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
                 s = s.squeeze(-1)  # make sure s is the same shape as scores[fwd_index]
             scores[fwd_index] += s
 
-            if save_scores_per_node:
-                if use_clean_id_names:
-                    assert clean_id_names is not None, "clean_id_names is required when save_scores_per_node is True"
-                    assert len(clean_id_names) == batch_size, "clean_id_names must be the same length as batch_size"
-                # Create scores per example for each node because temp is not always defined
-                scores_per_example = temp.clone() if temp is not None else score_per_pos.clone().sum(dim=1)  # [batch, forward]
-                
-                # Determine which node each column of scores_per_example corresponds to
-                if isinstance(fwd_index, int):
-                    node_indices = [fwd_index]
-                elif isinstance(fwd_index, slice):
-                    node_indices = list(range(fwd_index.start or 0, fwd_index.stop, fwd_index.step or 1))
-                elif hasattr(fwd_index, '__iter__'):
-                    node_indices = list(fwd_index)
-                else:
-                    raise ValueError(f"Unsupported fwd_index type: {type(fwd_index)}")
-
-                assert len(node_indices) == scores_per_example.shape[1], (
-                    f"Number of node_indices ({len(node_indices)}) doesn't match number of columns ({scores_per_example.shape[1]})"
-                )
-
-                # Save batch scores before s aggregation (in temp).
-                # Remember it's [batch, forward] and we want to create a list of scores for all examples
-                for i, curr_fwd_index in enumerate(node_indices):
-                    node_name = node_forward_index_to_name[curr_fwd_index]
-                    for batch_idx in range(scores_per_example.shape[0]):
-                        example_idx = items_until_now + batch_idx
-                        example_name = f"example_{example_idx}" if not use_clean_id_names else clean_id_names[batch_idx]
-                        score = scores_per_example[batch_idx, i].item()
-                        scores_nodes_all_examples[node_name][example_name] += score  # sum over steps
-
             if scores_examples_np_arr is not None and indicies_examples_torch_arr is not None:
                 scores_per_example = (temp.clone() if temp is not None else score_per_pos.clone().sum(dim=1)).cpu().numpy()  # [batch, forward]
                 examples_idx = indicies_examples_torch_arr.cpu().numpy()
@@ -706,15 +671,12 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
 
 def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
                          dataloader:DataLoader, metric: Callable[[Tensor], Tensor], device, quiet=False,
-                            aggregation='sum', abs_per_pos=False, are_clean_logits_needed=False, all_examples_scores_csv_path:Path=None, 
-                            use_clean_id_names:bool=False, all_examples_scores_npy_path:str=None):
+                            aggregation='sum', abs_per_pos=False, are_clean_logits_needed=False, all_examples_scores_npy_path:str=None):
     
     scores = torch.zeros((graph.n_forward), device= device, dtype=model.cfg.dtype)
     total_items = 0
     total_examples = len(dataloader.dataset)  
     dataloader = dataloader if quiet else tqdm(dataloader)
-    scores_nodes_all_examples = defaultdict(lambda: defaultdict(float))
-    node_forward_index_to_name = {graph.forward_index(node, attn_slice=False): node.name for node in graph.nodes.values() if not isinstance(node, LogitNode)}
 
     scores_examples_np_arr = None
     idx_to_example_name_list = None
@@ -736,8 +698,7 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
             indicies_examples_torch_arr = torch.arange(length_before, length_after)
 
         (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices_nodes(model, graph, batch_size, n_pos, scores, device, True, aggregation, abs_per_pos, 
-        lengths_clean.to(device), scores_nodes_all_examples, node_forward_index_to_name, total_items - batch_size, save_scores_per_node=all_examples_scores_csv_path is not None,
-        clean_id_names=clean_id_names, use_clean_id_names=use_clean_id_names, scores_examples_np_arr=scores_examples_np_arr, indicies_examples_torch_arr=indicies_examples_torch_arr)
+        lengths_clean.to(device), scores_examples_np_arr=scores_examples_np_arr, indicies_examples_torch_arr=indicies_examples_torch_arr)
         
         with torch.no_grad():
             with model.hooks(fwd_hooks=fwd_hooks_corrupted):
@@ -768,20 +729,6 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
 
     scores /= total_items #averaging over all scores
 
-    if all_examples_scores_csv_path is not None:
-        try:
-            node_names = sorted(scores_nodes_all_examples.keys())
-            example_names = sorted({ex for node in scores_nodes_all_examples.values() for ex in node})
-
-            data = []
-            for node_name in node_names:
-                row = [scores_nodes_all_examples[node_name][ex] for ex in example_names]
-                data.append(row)
-            df = pd.DataFrame(data, index=node_names, columns=example_names)
-            df.to_csv(all_examples_scores_csv_path)
-        except Exception as e:
-            warnings.warn(f"Failed to save CSV to {all_examples_scores_csv_path}: {e}")
-
     if all_examples_scores_npy_path is not None:
         save_path = Path(all_examples_scores_npy_path)
         np.savez_compressed(save_path,
@@ -792,15 +739,12 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
 
 
 def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: DataLoader,
-                            metric: Callable[[Tensor], Tensor], device, steps=30, quiet=False, aggregation='sum', abs_per_pos=False, all_examples_scores_csv_path:Path=None, 
-                            use_clean_id_names:bool=False, all_examples_scores_npy_path:str=None):
+                            metric: Callable[[Tensor], Tensor], device, steps=30, quiet=False, aggregation='sum', abs_per_pos=False, all_examples_scores_npy_path:str=None):
 
     scores = torch.zeros((graph.n_forward), device= device, dtype=model.cfg.dtype)
     total_items = 0
     total_examples = len(dataloader.dataset)  
     dataloader = dataloader if quiet else tqdm(dataloader)
-    scores_nodes_all_examples = defaultdict(lambda: defaultdict(float))
-    node_forward_index_to_name = {graph.forward_index(node, attn_slice=False): node.name for node in graph.nodes.values() if not isinstance(node, LogitNode)}
 
     scores_examples_np_arr = None
     idx_to_example_name_list = None
@@ -822,9 +766,8 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
             length_after = len(idx_to_example_name_list)
             indicies_examples_torch_arr = torch.arange(length_before, length_after)
 
-        (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices_nodes(model, graph, batch_size, n_pos, scores, device, True, aggregation, abs_per_pos, lengths_clean.to(device), scores_nodes_all_examples, 
-        node_forward_index_to_name, total_items - batch_size, save_scores_per_node=all_examples_scores_csv_path is not None, 
-        clean_id_names=clean_id_names, use_clean_id_names=use_clean_id_names, scores_examples_np_arr=scores_examples_np_arr, indicies_examples_torch_arr=indicies_examples_torch_arr)
+        (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices_nodes(model, graph, batch_size, n_pos, scores, device, True, aggregation, abs_per_pos, lengths_clean.to(device), 
+        scores_examples_np_arr=scores_examples_np_arr, indicies_examples_torch_arr=indicies_examples_torch_arr)
         with torch.inference_mode():
             with model.hooks(fwd_hooks=fwd_hooks_corrupted):
                 _ = model.forward(
@@ -867,22 +810,6 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
     scores /= total_items
     scores /= total_steps
 
- 
-    if all_examples_scores_csv_path is not None:
-        try:
-            node_names = sorted(scores_nodes_all_examples.keys())
-            example_names = sorted({ex for node in scores_nodes_all_examples.values() for ex in node})
-
-            data = []
-            for node_name in node_names:
-                row = [scores_nodes_all_examples[node_name][ex] for ex in example_names]
-                data.append(row)
-            df = pd.DataFrame(data, index=node_names, columns=example_names)
-            df = df / total_steps  # <-- divide all values to get the average
-            df.to_csv(all_examples_scores_csv_path)
-        except Exception as e:
-            warnings.warn(f"Failed to save CSV to {all_examples_scores_csv_path}: {e}")
-
     if all_examples_scores_npy_path is not None:
         save_path = Path(all_examples_scores_npy_path)
         scores_examples_np_arr = scores_examples_np_arr / total_steps
@@ -891,278 +818,6 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
          example_row_names=np.array(idx_to_example_name_list, dtype=object))
 
     return scores
-
-
-def create_masks(
-        tokenized_inputs: torch.Tensor,
-        repeat_locations_list: List[List[List[int]]],
-        sequences_list:  List[str],
-        alignments_list: List[List[str]],
-        tokenizer):
-    """
-    Creates several boolean masks for sequence analysis, returned as stacked tensors:
-    - repeat_positions_masks: (batch, seq_len) mask for all repeat positions
-    - identical_repeat_positions_masks: (batch, seq_len) mask for identical repeat positions
-    - non_identical_repeat_positions_masks: (batch, seq_len) mask for non-identical repeat positions
-    - non_repeat_positions_masks: (batch, seq_len) mask for positions that are not repeats
-    - masked_positions_masks: (batch, seq_len) mask for externally masked positions
-    """
-
-    repeat_positions_masks = []
-    identical_repeat_positions_masks = []
-    non_identical_repeat_positions_masks = []
-    non_repeat_positions_masks = []
-    masked_positions_masks = []
-    all_tokens_masks = []
-
-    for i, (seq, repeat_locations, alignments) in enumerate(zip(sequences_list, repeat_locations_list, alignments_list)):
-        result_abs_pos_to_repeat_info, _ = analyze_repeat_positions(
-            protein_seq=seq,
-            repeat_locations=repeat_locations,
-            alignments=alignments)
-
-        tokenized_input = tokenized_inputs[i]
-        repeat_positions = []
-        identical_repeat_positions = []
-        non_identical_repeat_positions = []
-
-        for j, (start, end) in enumerate(repeat_locations):
-            for pos in range(start, end + 1):
-                idx = pos + 1  # +1: tokenizer starts at 1
-                repeat_positions.append(idx)
-                info = result_abs_pos_to_repeat_info[j][pos]
-                if info.is_aligned_matching_identical:
-                    identical_repeat_positions.append(idx)
-                elif info.aligned_matching_absolute_position_in_sequence is not None:
-                    non_identical_repeat_positions.append(idx)
-
-        repeat_positions_mask = torch.zeros(len(tokenized_input), dtype=torch.bool)
-        if repeat_positions:
-            repeat_positions_mask[repeat_positions] = True
-        repeat_positions_masks.append(repeat_positions_mask)
-
-        identical_repeat_positions_mask = torch.zeros(len(tokenized_input), dtype=torch.bool)
-        if identical_repeat_positions:
-            identical_repeat_positions_mask[identical_repeat_positions] = True
-
-        non_identical_repeat_positions_mask = torch.zeros(len(tokenized_input), dtype=torch.bool)
-        if non_identical_repeat_positions:
-            non_identical_repeat_positions_mask[non_identical_repeat_positions] = True
-
-        non_repeat_positions_mask = torch.ones(len(tokenized_input), dtype=torch.bool)
-        if repeat_positions:
-            non_repeat_positions_mask[repeat_positions] = False
-        non_repeat_positions_masks.append(non_repeat_positions_mask)
-
-        masked_pos = (tokenized_input == tokenizer.mask_token_id).nonzero(as_tuple=True)[0][0].item()
-        masked_positions_mask = torch.zeros(len(tokenized_input), dtype=torch.bool)
-        masked_positions_mask[masked_pos] = True
-        masked_positions_masks.append(masked_positions_mask)
-
-        identical_repeat_positions_mask = identical_repeat_positions_mask & (~masked_positions_mask)
-        non_identical_repeat_positions_mask = non_identical_repeat_positions_mask & ( ~masked_positions_mask )
-
-        identical_repeat_positions_masks.append(identical_repeat_positions_mask)
-        non_identical_repeat_positions_masks.append(non_identical_repeat_positions_mask)
-
-        all_tokens_mask = torch.ones(len(tokenized_input), dtype=torch.bool)
-        all_tokens_masks.append(all_tokens_mask)
-
-    mask_dict = {
-        "repeat_positions": torch.stack(repeat_positions_masks, dim=0),
-        "identical_repeat_positions": torch.stack(identical_repeat_positions_masks, dim=0),
-        "non_identical_repeat_positions": torch.stack(non_identical_repeat_positions_masks, dim=0),
-        "non_repeat_positions": torch.stack(non_repeat_positions_masks, dim=0),
-        "masked_positions": torch.stack(masked_positions_masks, dim=0),
-        "all_tokens": torch.stack(all_tokens_masks, dim=0)
-    }
-
-    # Stack to get (batch, seq_len) tensors and
-    return mask_dict
-
-
-def make_hooks_and_matrices_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Graph, batch_size:int, 
-                                 n_pos:int, scores_dict: dict, masks_dict: dict, attention_mask: torch.Tensor,
-                                 device, detach=True, aggregation='sum', abs_per_pos=False):
-    
-    activation_difference = torch.zeros((batch_size, n_pos, graph.n_forward, model.cfg.d_model), device=device, dtype=model.cfg.dtype) 
-
-    processed_attn_layers = set()
-    fwd_hooks_clean = []
-    fwd_hooks_corrupted = []
-    bwd_hooks = []
-    
-    def activation_hook(index, activations, hook, add : bool = True):
-        """Hook to add/subtract activations to/from the activation difference matrix
-        Args:
-            index ([type]): forward index of the node
-            activations ([type]): activations to add
-            hook ([type]): hook (unused)
-            add (bool, optional): whether to add or subtract. Defaults to True."""
-        acts = activations.detach() if detach else activations
-        if not add:
-            acts = -acts
-        try:
-            activation_difference[:, :, index] += acts
-        except RuntimeError as e:
-            raise RuntimeError(f"Activation hook error at {hook.name}: {e}") from e
-    
-    def gradient_hook(aggregation:str, abs_per_pos:bool, fwd_index: Union[slice, int], gradients:torch.Tensor, hook):
-        """Takes in a gradient and uses it and activation_difference 
-        to compute an update to the score matrix"""
-
-        grads = gradients.detach()
-        try:
-            if grads.ndim == 3:
-                grads = grads.unsqueeze(2)
-            fwd_diff = activation_difference[:, :, fwd_index]
-            if fwd_diff.ndim == 3:
-                fwd_diff = fwd_diff.unsqueeze(2)
-
-            if fwd_diff.shape[2] != grads.shape[2]:
-                raise ValueError(f"fwd_diff shape {fwd_diff.shape} does not match grads shape {grads.shape} for fwd_index {fwd_index}")
-            for key, mask in masks_dict.items():
-                score_per_pos = einsum(fwd_diff, grads,'batch pos forward hidden, batch pos forward hidden -> batch pos forward') # [batch, pos, forward]
-                temp = None
-                
-                combined_mask = mask & attention_mask
-                combined_mask = combined_mask.unsqueeze(2)
-                combined_mask = combined_mask.float().to(device)
-                score_per_pos = score_per_pos * combined_mask
-                if abs_per_pos:
-                    score_per_pos = score_per_pos.abs()
-                if aggregation == 'sum':
-                    s = score_per_pos.sum(dim=(0, 1))
-                elif aggregation == 'pos_mean':
-                    # average over positions for each example, then sum over batch
-                    # shape is [batch, pos, forward]
-                    temp = score_per_pos.sum(dim=1)  # now [batch, forward]
-                    non_masked_positions = combined_mask.squeeze(-1).sum(dim=-1) # [batch]
-                    temp = temp / non_masked_positions.view(-1, 1)
-                    s = temp.sum(dim=0)  # [forward]
-                else:
-                    raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
-                    
-                if scores_dict[key][fwd_index].ndim < s.ndim:
-                    s = s.squeeze(-1)  # make sure s is the same shape as scores[fwd_index]
-                scores_dict[key][fwd_index] += s
-
-        except RuntimeError as e:
-            raise RuntimeError(f"Gradient hook error at {hook.name}: {e}") from e
-
-    for name, node in graph.nodes.items():
-        if isinstance(node, AttentionNode):
-            if node.layer in processed_attn_layers:
-                continue
-            else:
-                processed_attn_layers.add(node.layer)
-
-        # exclude logits from forward and backward
-        if not isinstance(node, LogitNode):
-            fwd_index = graph.forward_index(node)
-            fwd_hooks_corrupted.append((node.out_hook, partial(activation_hook, fwd_index)))
-            fwd_hooks_clean.append((node.out_hook, partial(activation_hook, fwd_index, add=False))) #(Corrupted - Clean)
-            bwd_hooks.append((node.out_hook, partial(gradient_hook, aggregation, abs_per_pos, fwd_index)))
-       
-            
-    return (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference
-
-        
-        
-def get_scores_eap_ig_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: DataLoader,
-                            metric: Callable[[Tensor], Tensor], device, steps=30, quiet=False, aggregation='sum', abs_per_pos=False):
-
-    scores_keys = ['repeat_positions', 'identical_repeat_positions', 'non_identical_repeat_positions', 'non_repeat_positions', 'masked_positions', 'all_tokens']
-    scores_dict = {key: torch.zeros((graph.n_forward), device= device, dtype=model.cfg.dtype) for key in scores_keys}
-    total_items = 0
-    dataloader = dataloader if quiet else tqdm(dataloader)
-
-
-    for clean, corrupted , masked_positions, labels, repeat_locations_list, alignments_list,  sequences_list in dataloader:
-        batch_size = len(clean)
-        total_items += batch_size
-        model_name = model.cfg.model_name
-        if model_name is None:
-            model_name = "esm3" if isinstance(model, HookedESM3) else "esm-c" if isinstance(model, HookedESMC) else "esm3"
-        tokenizer = load_tokenizer_by_model_type(model_name)
-        clean_tokens, attention_mask_clean, n_pos , lengths_clean= tokenize_plus(model, clean) 
-        corrupted_tokens, attention_mask_corrupted, _ , _= tokenize_plus(model, corrupted)
-
-        masks_dict = create_masks(clean_tokens, repeat_locations_list, sequences_list, alignments_list, tokenizer)
-        (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices_nodes_per_token(model, graph, batch_size, n_pos, scores_dict, masks_dict, attention_mask_clean, device, True, aggregation, abs_per_pos)
-        with torch.inference_mode():
-            with model.hooks(fwd_hooks=fwd_hooks_corrupted):
-                _ = model.forward(
-                        sequence_tokens=corrupted_tokens.to(device),
-                        sequence_id=attention_mask_corrupted.to(device)
-                    )
-
-            input_activations_corrupted = activation_difference[:, :, graph.forward_index(graph.nodes['input'])].clone()
-       
-            with model.hooks(fwd_hooks=fwd_hooks_clean):
-                clean_logits = model.forward(
-                        sequence_tokens=clean_tokens.to(device),
-                        sequence_id=attention_mask_clean.to(device)
-                    )
-                clean_logits= clean_logits.detach()
-
-        input_activations_clean = input_activations_corrupted - activation_difference[:, :, graph.forward_index(graph.nodes['input'])]
-
-        def input_interpolation_hook(k: int):
-            def hook_fn(activations, hook):
-                new_input = input_activations_corrupted + (k / steps) * (input_activations_clean - input_activations_corrupted) + activations * 0
-                return new_input
-            return hook_fn
-
-        total_steps = 0
-        for step in range(1, steps+1):
-            total_steps += 1
-            with model.hooks(fwd_hooks=[(graph.nodes['input'].out_hook, input_interpolation_hook(step))], bwd_hooks=bwd_hooks):
-                logits = model.forward(
-                    sequence_tokens=clean_tokens.to(device),
-                    sequence_id=attention_mask_clean.to(device)
-                )
-                masked_positions_tensor = torch.tensor(masked_positions, device=device)
-                labels_tensor = torch.tensor(labels, device=device)
-                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor)
-                metric_value.backward()
-                model.zero_grad(set_to_none=True)  # clear the gradients
-
-    assert total_steps == steps, f"total_steps {total_steps} is not equal to steps {steps}"
-    for key in scores_keys:
-        scores_dict[key] /= total_items
-        scores_dict[key] /= total_steps
-    return scores_dict
-     
-
-def attribute_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: DataLoader, metric: Callable[[Tensor], Tensor], device, aggregation='sum',
- method: Union[Literal['EAP-IG']]="EAP-IG", quiet=False, abs_per_pos=False, eap_ig_steps=None, scores_csv_path:str=None):
-    
-    if aggregation not in allowed_aggregations:
-        raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
-
-    if method == 'EAP-IG':
-        scores_dict = get_scores_eap_ig_nodes_per_token(model, graph, dataloader, metric, device, steps=eap_ig_steps, quiet=quiet, aggregation=aggregation, abs_per_pos=abs_per_pos)
-    else:
-        raise ValueError(f"integrated_gradients must be in ['EAP'], but got {method}")
-    
-    for key in scores_dict.keys():
-        scores_dict[key] = scores_dict[key].cpu().numpy()  # this will detach the scores
-
-    if scores_csv_path is not None:
-        out_dir = os.path.dirname(scores_csv_path)
-        if out_dir:  # Avoid trying to create '' (empty string) as a directory
-            os.makedirs(out_dir, exist_ok=True)
-    rows = []
-    for node in tqdm(graph.nodes.values(), total=len(graph.nodes)):
-        if isinstance(node, LogitNode):
-            continue  # skip logits nodes cause it doesnt have gradient.
-        row = [node.name] + [scores_dict[key][graph.forward_index(node, attn_slice=False)] for key in scores_dict.keys()]
-        rows.append(row)
-    columns = ['node_name'] + list(scores_dict.keys())
-    df = pd.DataFrame(rows, columns=columns)
-    df.to_csv(scores_csv_path, index=False)
-
 
 
 def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph, batch_size:int, 
