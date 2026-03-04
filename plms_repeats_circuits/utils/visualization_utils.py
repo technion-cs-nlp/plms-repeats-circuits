@@ -1014,11 +1014,11 @@ def add_example_label(fig, rep_id, row, col, n_rows, n_cols, params):
 
 
 def create_attention_heatmap(model, example_data, component, params, config, show_colorbar, row_num, n_rows, col_num=None, n_cols=None, cache=None, tokens=None, tokenizer=None):
-    from protein_circuits.utils.esm3_utils import mask_protein_short, replace_short_mask_with_mask_token, load_tokenizer
-    from protein_circuits.EAP.attribute import tokenize_plus
+    from plms_repeats_circuits.utils.esm_utils import mask_protein_short, replace_short_mask_with_mask_token, load_tokenizer_by_model_type
+    from plms_repeats_circuits.EAP.attribute import tokenize_plus
     
     if tokenizer is None:
-        tokenizer = load_tokenizer(config.model_type, model)
+        tokenizer = load_tokenizer_by_model_type(config.model_type)
     
     if tokens is None or cache is None:
         seq = example_data["seq"]
@@ -1084,11 +1084,11 @@ def create_attention_heatmap(model, example_data, component, params, config, sho
 
 def create_neuron_single_row_heatmap(model, example_data, component, params, config, show_colorbar, cache=None, tokens=None, tokenizer=None):
     """Create a single-row heatmap for neuron visualization."""
-    from protein_circuits.utils.esm3_utils import mask_protein_short, replace_short_mask_with_mask_token, load_tokenizer
-    from protein_circuits.EAP.attribute import tokenize_plus
+    from plms_repeats_circuits.utils.esm_utils import mask_protein_short, replace_short_mask_with_mask_token, load_tokenizer_by_model_type
+    from plms_repeats_circuits.EAP.attribute import tokenize_plus
     
     if tokenizer is None:
-        tokenizer = load_tokenizer(config.model_type, model)
+        tokenizer = load_tokenizer_by_model_type(config.model_type)
     
     if tokens is None or cache is None:
         seq = example_data["seq"]
@@ -1281,11 +1281,11 @@ def create_neuron_single_row_heatmap(model, example_data, component, params, con
 
 
 def create_neuron_heatmap(model, example_data, component, params, config, show_colorbar, cache=None, tokens=None, tokenizer=None):
-    from protein_circuits.utils.esm3_utils import mask_protein_short, replace_short_mask_with_mask_token, load_tokenizer
-    from protein_circuits.EAP.attribute import tokenize_plus
+    from plms_repeats_circuits.utils.esm_utils import mask_protein_short, replace_short_mask_with_mask_token, load_tokenizer_by_model_type
+    from plms_repeats_circuits.EAP.attribute import tokenize_plus
     
     if tokenizer is None:
-        tokenizer = load_tokenizer(config.model_type, model)
+        tokenizer = load_tokenizer_by_model_type(config.model_type)
     
     if tokens is None or cache is None:
         seq = example_data["seq"]

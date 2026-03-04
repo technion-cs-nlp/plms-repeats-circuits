@@ -9,16 +9,15 @@ from transformer_lens import HookedESM3, HookedESMC
 from tqdm import tqdm
 from einops import einsum
 from .graph import Graph, InputNode, LogitNode, AttentionNode, MLPNode, GraphType, MLPWithNeuronNode, NeuronGraph
-from esm.tokenization import get_esm3_model_tokenizers
 from transformer_lens.hook_points import HookPoint
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from collections import defaultdict
 from plms_repeats_circuits.utils.protein_similiarity_utils import analyze_repeat_positions, RepeatPositionData
-from esm.tokenization import get_esm3_model_tokenizers
 import os
-from plms_repeats_circuits.utils.esm_utils import load_tokenizer
+import warnings
+from plms_repeats_circuits.utils.esm_utils import load_tokenizer_by_model_type
 
 def load_mean_ablations(mean_ablations_dir: str, device, separate_mask_positions: bool):
     """
@@ -33,7 +32,6 @@ def load_mean_ablations(mean_ablations_dir: str, device, separate_mask_positions
     cache = {}
     mean_ablations_path = Path(mean_ablations_dir)
     
-    # Determine which files to load
     modes = ['all']
     if separate_mask_positions:
         modes.extend(['exclude_mask', 'only_mask'])
@@ -55,9 +53,8 @@ def load_mean_ablations(mean_ablations_dir: str, device, separate_mask_positions
             filepath = mean_ablations_path / filename
             if filepath.exists():
                 cache[component][mode] = torch.load(filepath, map_location=device)
-                print(f"Loaded {filename}: shape {cache[component][mode].shape}")
             else:
-                print(f"Warning: {filepath} not found, skipping...")
+                warnings.warn(f"{filepath} not found, skipping...")
     
     return cache
 
@@ -95,7 +92,7 @@ def initialize_activation_difference_with_mean_ablations(
         # Get mean neuron activations: [n_layers, d_mlp]
         mean_neurons = mean_ablations_cache['neurons'].get(use_mode)
         if mean_neurons is None:
-            print(f"Warning: mode '{use_mode}' not found in neurons cache, using zeros")
+            warnings.warn(f"mode '{use_mode}' not found in neurons cache, using zeros")
             return activation_diff
         
         # Ensure mean_neurons is on the correct device
@@ -127,7 +124,7 @@ def initialize_activation_difference_with_mean_ablations(
         mean_input = mean_ablations_cache['input'].get(use_mode)
         
         if mean_mlp is None or mean_attn is None or mean_input is None:
-            print(f"Warning: mode '{use_mode}' not found in mlp/attention/input cache, using zeros")
+            warnings.warn(f"mode '{use_mode}' not found in mlp/attention/input cache, using zeros")
             return activation_diff
         
         # Ensure tensors are on the correct device
@@ -195,7 +192,7 @@ def overwrite_masked_positions_with_mean_ablations(
         # Get mean neuron activations for masked positions: [n_layers, d_mlp]
         mean_neurons = mean_ablations_cache['neurons'].get(use_mode)
         if mean_neurons is None:
-            print(f"Warning: mode '{use_mode}' not found in neurons cache, not overwriting masked positions")
+            warnings.warn(f"mode '{use_mode}' not found in neurons cache, not overwriting masked positions")
             return
         
         # Ensure on correct device
@@ -228,7 +225,7 @@ def overwrite_masked_positions_with_mean_ablations(
         mean_input = mean_ablations_cache['input'].get(use_mode)
         
         if mean_mlp is None or mean_attn is None or mean_input is None:
-            print(f"Warning: mode '{use_mode}' not found in mlp/attention/input cache, not overwriting masked positions")
+            warnings.warn(f"mode '{use_mode}' not found in mlp/attention/input cache, not overwriting masked positions")
             return
         
         # Ensure on correct device
@@ -266,22 +263,6 @@ def overwrite_masked_positions_with_mean_ablations(
                     for pos in masked_pos_list:
                         activation_diff[b, pos, fwd_idx] = mean_attn[layer, head]
 
-def show_memory():
-    # Total allocated memory
-    allocated = torch.cuda.memory_allocated()
-    print(f"Allocated Memory: {allocated / 1e9:.2f} GB")
-
-    # Total reserved memory (including fragmentation)
-    reserved = torch.cuda.memory_reserved()
-    print(f"Reserved Memory: {reserved / 1e9:.2f} GB")
-
-    # Free unallocated memory within reserved memory
-    free = reserved - allocated
-    print(f"Free Memory: {free / 1e9:.2f} GB")
-
-    total_memory = torch.cuda.get_device_properties(0).total_memory  # Bytes
-    print(f"Total GPU Memory: {total_memory / 1e9:.2f} GB")
-
 def tokenize_plus(model: HookedESM3 | HookedESMC, inputs: List[str]):
     model_name = model.cfg.model_name
     if model_name is None:
@@ -292,7 +273,7 @@ def tokenize_plus(model: HookedESM3 | HookedESMC, inputs: List[str]):
         else:
             raise ValueError(f"Model {model} is not supported")
 
-    tokenizer = load_tokenizer(model_type=model.cfg.model_name, model=model)
+    tokenizer = load_tokenizer_by_model_type(model_name)
     tokenized_info = tokenizer(inputs, padding=True, return_tensors='pt', add_special_tokens=True)
     tokens = tokenized_info.input_ids
     attention_mask = tokenized_info.attention_mask 
@@ -301,7 +282,7 @@ def tokenize_plus(model: HookedESM3 | HookedESMC, inputs: List[str]):
     return tokens, attention_mask, n_pos, lengths
 
 def make_hooks_and_matrices(model: HookedESM3 | HookedESMC, graph: Graph, batch_size:int , n_pos:int, scores: torch.Tensor, device, detach=True, aggregation='sum', abs_per_pos=False, lengths=None):
-    activation_difference = torch.zeros((batch_size, n_pos, graph.n_forward, model.cfg.d_model), device=device, dtype=model.cfg.dtype) #a tensor to stor activation differences of each componenet from forward
+    activation_difference = torch.zeros((batch_size, n_pos, graph.n_forward, model.cfg.d_model), device=device, dtype=model.cfg.dtype)
 
     processed_attn_layers = set()
     fwd_hooks_clean = []
@@ -321,8 +302,7 @@ def make_hooks_and_matrices(model: HookedESM3 | HookedESMC, graph: Graph, batch_
         try:
             activation_difference[:, :, index] += acts
         except RuntimeError as e:
-            print("Activation Hook Error", hook.name, activation_difference[:, :, index].size(), acts.size(), index)
-            raise e
+            raise RuntimeError(f"Activation hook error at {hook.name}: {e}") from e
     
     def gradient_hook(lengths, aggregation:str, abs_per_pos:bool, prev_index: Union[slice, int], bwd_index: Union[slice, int], gradients:torch.Tensor, 
                       hook:HookPoint):
@@ -337,8 +317,7 @@ def make_hooks_and_matrices(model: HookedESM3 | HookedESMC, graph: Graph, batch_
         grads = gradients.detach()
         try:
             if grads.ndim == 3:
-                grads = grads.unsqueeze(2) #meaning we get [batch pos 1 hidden] in that case 
-            
+                grads = grads.unsqueeze(2)            
             score_per_pos = einsum(activation_difference[:, :, :prev_index], grads,'batch pos forward hidden, batch pos backward hidden -> batch pos forward backward')
             if abs_per_pos:
                 score_per_pos = score_per_pos.abs()
@@ -353,30 +332,10 @@ def make_hooks_and_matrices(model: HookedESM3 | HookedESMC, graph: Graph, batch_
             else:
                 raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
 
-            #lets divide for cases to understand what is going one here:
-                #if the node is logits node: we hook the residual post of the last layer (before layer normalization and all regression heads)
-                #basically the input to the logit node is [batch,pos, hidden] so the gradient of the metric w.r.t the input is also [batch,pos, hidden]
-                #so we will unsqueeze(2) and get [batch pos 1 hidden]. #prev index is size graph.n_forward, so we basically get activation diffrences for all nodes
-                #we will compute the approximated metric diffrences for each forward component and logit node, summed over all positions and batches
-
-                #if node is mlp node : we hook the residual before adding mlp result (input mlp component).
-                #basically the input to the mlp node is [batch,pos, hidden] so the gradient of the metric w.r.t the input is also [batch,pos, hidden]
-                #so we will unsqueeze(2) and get [batch pos 1 hidden]. #prev index is size all the components before that mlp node (input+attentions+mlps before), 
-                #so we basically get activation diffrences for previous nodes to that mlp because we assume all that nodes enter our mlp
-                #we will compute the approximated metric diffrences for each prev component and mlp node, summed over all positions and bathces
-
-                #if node is attention node : we hook the q,k,v matrices seperatly so we get here one of them. q,k,v are inputs to attention component
-                #basically the input q or k or v to the attention node is [batch, pos, n_heads, hidden] so the gradient of the metric w.r.t the input is also [batch, pos, n_heads, hidden]
-                #so we won't unsqueeze(2)]. #prev index is size all the components before that attention node (input+attentions+mlps before), 
-                #so we basically get activation diffrences for previous nodes to that attention node because we assume all that nodes enter our attention
-                #we will compute the approximated metric diffrences for each prev component and *each mlp head*, summed over all positions and bathces
-                #i forgot to mention that bwd_index is a slice of all attention heads indexs in that case!
-
-            s = s.squeeze(1)#.to(scores.device)
-            scores[:prev_index, bwd_index] += s #we compute approximated metric diff for edges from all prev components to the current components
+            s = s.squeeze(1)
+            scores[:prev_index, bwd_index] += s
         except RuntimeError as e:
-            print("Gradient Hook Error", hook.name, activation_difference.size(), grads.size(), prev_index, bwd_index)
-            raise e
+            raise RuntimeError(f"Gradient hook error at {hook.name}: {e}") from e
 
     for name, node in graph.nodes.items():
         if isinstance(node, AttentionNode):
@@ -407,8 +366,6 @@ def get_scores_eap_ig(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: 
     total_items = 0
     dataloader = dataloader if quiet else tqdm(dataloader)
     for clean, corrupted , masked_positions, labels, clean_id_names in dataloader:
-        #print(f"memory for example {total_items} - begin")
-        show_memory()
         batch_size = len(clean)
         total_items += batch_size
 
@@ -451,12 +408,9 @@ def get_scores_eap_ig(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: 
                 )
                 masked_positions_tensor = torch.tensor(masked_positions, device=device)
                 labels_tensor = torch.tensor(labels, device=device)
-                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor) #the metric for attribution patching expect clean and corrupted. for eap-ig this is different
-                print(f"before backword- step{step}, shape:{clean_tokens.shape}")
-                show_memory()
+                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor)
                 metric_value.backward()
-                print(f"after backword- step{step}, shape:{clean_tokens.shape}")
-                model.zero_grad(set_to_none=True)  # clear the gradients
+                model.zero_grad(set_to_none=True)
 
     assert total_steps == steps, f"total_steps {total_steps} is not equal to steps {steps}"
     scores /= total_items
@@ -466,7 +420,7 @@ def get_scores_eap_ig(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: 
 
 def get_scores_eap(model: HookedESM3 | HookedESMC, graph: Graph, dataloader:DataLoader, metric: Callable[[Tensor], Tensor], device, quiet=False,
 aggregation='sum', abs_per_pos=False, are_clean_logits_needed=False):
-    scores = torch.zeros((graph.n_forward, graph.n_backward), device= device, dtype=model.cfg.dtype) #to store scores of edges between all possible edges (even non existent one)
+    scores = torch.zeros((graph.n_forward, graph.n_backward), device= device, dtype=model.cfg.dtype)
     total_items = 0
     dataloader = dataloader if quiet else tqdm(dataloader)
     for clean, corrupted , masked_positions, labels, clean_id_names in dataloader:
@@ -474,7 +428,7 @@ aggregation='sum', abs_per_pos=False, are_clean_logits_needed=False):
         total_items += batch_size
         clean_tokens, attention_mask_clean, n_pos , lengths_clean= tokenize_plus(model, clean) 
         corrupted_tokens, attention_mask_corrupted, _ , _= tokenize_plus(model, corrupted) 
-        (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices(model, graph, batch_size, n_pos, scores, device, True, aggregation, abs_per_pos, lengths_clean.to(device)) # returns the required hooks + activation differences array but its empty
+        (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices(model, graph, batch_size, n_pos, scores, device, True, aggregation, abs_per_pos, lengths_clean.to(device))
         
         with torch.no_grad():
             with model.hooks(fwd_hooks=fwd_hooks_corrupted):
@@ -519,7 +473,6 @@ def attribute(model: HookedESM3 | HookedESMC, graph: Graph | NeuronGraph, datalo
         if mean_ablations_dir is None:
             raise ValueError("mean_ablations_dir must be provided when use_mean_ablations=True")
         mean_ablations_cache = load_mean_ablations(mean_ablations_dir, device, separate_mask_positions)
-        print(f"Loaded mean ablations from {mean_ablations_dir}")
     
     if isinstance(graph, NeuronGraph):
         attribute_neurons(model=model, graph=graph, dataloader=dataloader, metric=metric, device=device, aggregation=aggregation, method=method, 
@@ -528,11 +481,9 @@ def attribute(model: HookedESM3 | HookedESMC, graph: Graph | NeuronGraph, datalo
                         separate_mask_positions=separate_mask_positions)
     else:
         if graph.graph_type == GraphType.Edges:
-            print("performing attribute edges")
             attribute_edges(model=model, graph=graph, dataloader=dataloader, metric=metric, device=device, aggregation=aggregation, method=method, 
                             quiet=quiet, abs_per_pos=abs_per_pos, are_clean_logits_needed=are_clean_logits_needed, eap_ig_steps=eap_ig_steps)
         elif graph.graph_type == GraphType.Nodes:
-            print("performing attribute nodes")
             attribute_nodes(model=model, graph=graph, dataloader=dataloader, metric=metric, device=device, aggregation=aggregation, method=method, 
                         quiet=quiet, abs_per_pos=abs_per_pos, are_clean_logits_needed=are_clean_logits_needed, eap_ig_steps=eap_ig_steps, 
                         all_examples_scores_csv_path=all_examples_scores_csv_path, use_clean_id_names=use_clean_id_names, all_examples_scores_npy_path=all_examples_scores_npy_path)
@@ -550,22 +501,9 @@ def attribute_edges(model: HookedESM3, graph: Graph, dataloader: DataLoader, met
         scores = get_scores_eap_ig(model=model, graph=graph, dataloader=dataloader, metric=metric, device=device, steps=eap_ig_steps, quiet=quiet,aggregation=aggregation, abs_per_pos=abs_per_pos)
     else:
         raise ValueError(f"integrated_gradients must be in ['EAP'], but got {method}")
-    
-    # if aggregation == 'mean':
-    #     scores /= model.cfg.d_model
-    # elif aggregation == 'l2':
-    #     scores = torch.linalg.vector_norm(scores, ord=2, dim=-1)
 
-    scores = scores.cpu().numpy()  # this will detach the scores
-    print(f"scores: {scores}")
+    scores = scores.cpu().numpy()
     for edge in tqdm(graph.edges.values(), total=len(graph.edges)):
-        #to compute the score of an edge nod1->nod2: we take score in location [node1_index, node2_index]
-        #why its true ? because to compute the approx L(corrupted in component)-L(clean) = L(clean) + gradLclean(corrupted-clean)
-        #the gradient of node 2 is w.r.t its correct input since:
-        #We are computing the the gradient with respect to child node. the input to the child node is sum of all edges input = e_embedding +(e2+...+ek)*normalization factor
-        # so the grad for the embedding layer is same grad as the node since the gradient w.r.t to embedding layer is effectively 1 and also the grad of each other edge is normalization factor
-        #so our score is actually the activation difference of the edge gathered by parent node, so we just need the out activation value of a node and not an edge
-        #multiplied by the gradient of the node which is almost equal to the gradient of the edge 
         edge.score = scores[graph.forward_index(edge.parent, attn_slice=False), graph.backward_index(edge.child, qkv=edge.qkv, attn_slice=False)]*edge.weight
         
 def attribute_nodes(model: HookedESM3 | HookedESMC, graph: Graph, dataloader: DataLoader, metric: Callable[[Tensor], Tensor], device, aggregation='sum',
@@ -603,7 +541,6 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
     if mean_ablations_cache is not None:
         # Use mean ablations as initialization (clean hooks will subtract from this)
         # Result: mean_ablations - clean (analogous to corrupted - clean)
-        print(f"Nodes: Using mean ablations- separate_mask_positions: {separate_mask_positions}, masked_positions: {masked_positions}")
         if separate_mask_positions and masked_positions is not None:
             # Initialize with 'exclude_mask' mode (non-masked positions)
             activation_difference = initialize_activation_difference_with_mean_ablations(
@@ -641,18 +578,7 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
                 use_mode='all'
             )
     else:
-        print(f"Nodes: Using zeros- separate_mask_positions: {separate_mask_positions}, masked_positions: {masked_positions}")
-        activation_difference = torch.zeros((batch_size, n_pos, graph.n_forward, model.cfg.d_model), device=device, dtype=model.cfg.dtype) 
-    #a tensor to stor activation differences of each componenet from forward
-    #sneak peak at the activation_difference
-    print(f"Nodes: activation_difference shape: {activation_difference.shape}")
-    # Print sample values from a few positions and dimensions
-    if activation_difference.numel() > 0:
-        print(f"Nodes: Sample values at [batch=0, pos=0, component=0, dims=0:5]: {activation_difference[0, 0, 0, :5]}")
-        if activation_difference.shape[1] > 10:
-            print(f"Nodes: Sample values at [batch=0, pos=10, component=0, dims=0:5]: {activation_difference[0, 10, 0, :5]}")
-        if activation_difference.shape[2] > 1:
-            print(f"Nodes: Sample values at [batch=0, pos=0, component=1, dims=0:5]: {activation_difference[0, 0, 1, :5]}")
+        activation_difference = torch.zeros((batch_size, n_pos, graph.n_forward, model.cfg.d_model), device=device, dtype=model.cfg.dtype)
 
     processed_attn_layers = set()
     fwd_hooks_clean = []
@@ -672,8 +598,7 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
         try:
             activation_difference[:, :, index] += acts
         except RuntimeError as e:
-            print("Activation Hook Error", hook.name, activation_difference[:, :, index].size(), acts.size(), index)
-            raise e
+            raise RuntimeError(f"Activation hook error at {hook.name}: {e}") from e
     
     def gradient_hook(lengths, aggregation:str, abs_per_pos:bool, fwd_index: Union[slice, int], gradients:torch.Tensor, hook):
         """Takes in a gradient and uses it and activation_difference 
@@ -681,27 +606,25 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
 
         grads = gradients.detach()
         try:
-            if grads.ndim == 3: #mlp output for example is [batch, pos, hidden] but attention output is [batch, pos, n_heads, hidden]
-                grads = grads.unsqueeze(2) #meaning we get [batch pos 1 hidden] in that case 
-            fwd_diff = activation_difference[:, :, fwd_index] #activation difference for the forward component
-            if fwd_diff.ndim == 3: #attention output for example is [batch, pos, n_heads, hidden] and mlp output is [batch, pos, hidden]
+            if grads.ndim == 3:
+                grads = grads.unsqueeze(2)
+            fwd_diff = activation_difference[:, :, fwd_index]
+            if fwd_diff.ndim == 3:
                 fwd_diff = fwd_diff.unsqueeze(2)
-            #meaning we get [batch pos 1 hidden] in that case
 
             if fwd_diff.shape[2] != grads.shape[2]:
                 raise ValueError(f"fwd_diff shape {fwd_diff.shape} does not match grads shape {grads.shape} for fwd_index {fwd_index}")
-            #print(f"fwd_diff shape {fwd_diff.shape} and grads shape {grads.shape} for fwd_index {fwd_index}")
             score_per_pos = einsum(fwd_diff, grads,'batch pos forward hidden, batch pos forward hidden -> batch pos forward')
             temp = None
             if abs_per_pos:
                 score_per_pos = score_per_pos.abs()
             if aggregation == 'sum':
                 s = score_per_pos.sum(dim=(0, 1))
-            elif aggregation == 'pos_mean': #assumes gradients in padding is 0 , therefore the score for padding is 0
+            elif aggregation == 'pos_mean':
                 # average over positions for each example, then sum over batch
                 # shape is [batch, pos, forward]
                 temp = score_per_pos.sum(dim=1)  # now [batch, forward]
-                temp = temp / lengths.view(-1, 1) #lengths is [batch] so we need to reshape it to [batch, 1]
+                temp = temp / lengths.view(-1, 1)
                 s = temp.sum(dim=0)  # [forward]
             else:
                 raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
@@ -735,8 +658,7 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
                 # Remember it's [batch, forward] and we want to create a list of scores for all examples
                 for i, curr_fwd_index in enumerate(node_indices):
                     node_name = node_forward_index_to_name[curr_fwd_index]
-                    #print(f"node_name: {node_name}")
-                    for batch_idx in range(scores_per_example.shape[0]):  # for each example in batch
+                    for batch_idx in range(scores_per_example.shape[0]):
                         example_idx = items_until_now + batch_idx
                         example_name = f"example_{example_idx}" if not use_clean_id_names else clean_id_names[batch_idx]
                         score = scores_per_example[batch_idx, i].item()
@@ -761,8 +683,7 @@ def make_hooks_and_matrices_nodes(model: HookedESM3 | HookedESMC, graph: Graph, 
 
 
         except RuntimeError as e:
-            print("Gradient Hook Error", hook.name, activation_difference.size(), grads.size(),fwd_index)
-            raise e
+            raise RuntimeError(f"Gradient hook error at {hook.name}: {e}") from e
 
     for name, node in graph.nodes.items():
         if isinstance(node, AttentionNode):
@@ -798,9 +719,7 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
     scores_examples_np_arr = None
     idx_to_example_name_list = None
     if all_examples_scores_npy_path is not None:
-        print(f"total_examples: {total_examples}")
         scores_examples_np_arr = np.zeros((total_examples, graph.n_forward), dtype=np.float32)
-        print(f"scores_examples_np_arr shape: {scores_examples_np_arr.shape}")
         idx_to_example_name_list = []
 
     for clean, corrupted , masked_positions, labels, clean_id_names in dataloader:
@@ -811,7 +730,6 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
 
         indicies_examples_torch_arr = None
         if all_examples_scores_npy_path is not None:
-            #clean_id_names is a list of strings of length batch_size, we needd to add each elem to the idx_to_example_name_np_arr separately
             length_before = len(idx_to_example_name_list)
             idx_to_example_name_list.extend(clean_id_names)
             length_after = len(idx_to_example_name_list)
@@ -819,7 +737,7 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
 
         (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices_nodes(model, graph, batch_size, n_pos, scores, device, True, aggregation, abs_per_pos, 
         lengths_clean.to(device), scores_nodes_all_examples, node_forward_index_to_name, total_items - batch_size, save_scores_per_node=all_examples_scores_csv_path is not None,
-        clean_id_names=clean_id_names, use_clean_id_names=use_clean_id_names, scores_examples_np_arr=scores_examples_np_arr, indicies_examples_torch_arr=indicies_examples_torch_arr) # returns the required hooks + activation differences array but its empty
+        clean_id_names=clean_id_names, use_clean_id_names=use_clean_id_names, scores_examples_np_arr=scores_examples_np_arr, indicies_examples_torch_arr=indicies_examples_torch_arr)
         
         with torch.no_grad():
             with model.hooks(fwd_hooks=fwd_hooks_corrupted):
@@ -862,7 +780,7 @@ def get_scores_eap_nodes(model: HookedESM3 | HookedESMC, graph: Graph,
             df = pd.DataFrame(data, index=node_names, columns=example_names)
             df.to_csv(all_examples_scores_csv_path)
         except Exception as e:
-            print(f"Failed to save CSV to {all_examples_scores_csv_path}: {e}")
+            warnings.warn(f"Failed to save CSV to {all_examples_scores_csv_path}: {e}")
 
     if all_examples_scores_npy_path is not None:
         save_path = Path(all_examples_scores_npy_path)
@@ -887,14 +805,10 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
     scores_examples_np_arr = None
     idx_to_example_name_list = None
     if all_examples_scores_npy_path is not None:
-        print(f"total_examples: {total_examples}")
         scores_examples_np_arr = np.zeros((total_examples, graph.n_forward), dtype=np.float32)
-        print(f"scores_examples_np_arr shape: {scores_examples_np_arr.shape}")
         idx_to_example_name_list = []
 
     for clean, corrupted , masked_positions, labels, clean_id_names in dataloader:
-        #print(f"memory for example {total_items} - begin")
-        #show_memory()
         batch_size = len(clean)
         total_items += batch_size
 
@@ -903,7 +817,6 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
 
         indicies_examples_torch_arr = None
         if all_examples_scores_npy_path is not None:
-            #clean_id_names is a list of strings of length batch_size, we needd to add each elem to the idx_to_example_name_list separately
             length_before = len(idx_to_example_name_list)
             idx_to_example_name_list.extend(clean_id_names)
             length_after = len(idx_to_example_name_list)
@@ -933,13 +846,11 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
         def input_interpolation_hook(k: int):
             def hook_fn(activations, hook):
                 new_input = input_activations_corrupted + (k / steps) * (input_activations_clean - input_activations_corrupted) + activations * 0
-                #new_input.requires_grad = True
                 return new_input
             return hook_fn
 
         total_steps = 0
         for step in range(1, steps+1):
-            print(f"Step {step} of {steps} for item {total_items}")
             total_steps += 1
             with model.hooks(fwd_hooks=[(graph.nodes['input'].out_hook, input_interpolation_hook(step))], bwd_hooks=bwd_hooks):
                 logits = model.forward(
@@ -948,11 +859,8 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
                 )
                 masked_positions_tensor = torch.tensor(masked_positions, device=device)
                 labels_tensor = torch.tensor(labels, device=device)
-                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor) #the metric for attribution patching expect clean and corrupted. for eap-ig this is different
-                #print(f"before backword- step{step}, shape:{clean_tokens.shape}")
-                #show_memory()
+                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor)
                 metric_value.backward()
-                #print(f"after backword- step{step}, shape:{clean_tokens.shape}")
                 model.zero_grad(set_to_none=True)  # clear the gradients
 
     assert total_steps == steps, f"total_steps {total_steps} is not equal to steps {steps}"
@@ -973,13 +881,11 @@ def get_scores_eap_ig_nodes(model: HookedESM3 | HookedESMC, graph: Graph, datalo
             df = df / total_steps  # <-- divide all values to get the average
             df.to_csv(all_examples_scores_csv_path)
         except Exception as e:
-            print(f"Failed to save CSV to {all_examples_scores_csv_path}: {e}")
+            warnings.warn(f"Failed to save CSV to {all_examples_scores_csv_path}: {e}")
 
     if all_examples_scores_npy_path is not None:
         save_path = Path(all_examples_scores_npy_path)
         scores_examples_np_arr = scores_examples_np_arr / total_steps
-        print(f"scores_examples_np_arr shape: {scores_examples_np_arr.shape}")
-        print(f"idx_to_example_name_list length: {len(idx_to_example_name_list)}")
         np.savez_compressed(save_path,
          scores=scores_examples_np_arr,
          example_row_names=np.array(idx_to_example_name_list, dtype=object))
@@ -1024,7 +930,6 @@ def create_masks(
             for pos in range(start, end + 1):
                 idx = pos + 1  # +1: tokenizer starts at 1
                 repeat_positions.append(idx)
-                # if result_abs_pos_to_repeat_info is a dict from absolute pos, use result_abs_pos_to_repeat_info[pos]
                 info = result_abs_pos_to_repeat_info[j][pos]
                 if info.is_aligned_matching_identical:
                     identical_repeat_positions.append(idx)
@@ -1081,7 +986,6 @@ def make_hooks_and_matrices_nodes_per_token(model: HookedESM3 | HookedESMC, grap
                                  device, detach=True, aggregation='sum', abs_per_pos=False):
     
     activation_difference = torch.zeros((batch_size, n_pos, graph.n_forward, model.cfg.d_model), device=device, dtype=model.cfg.dtype) 
-    #a tensor to stor activation differences of each componenet from forward
 
     processed_attn_layers = set()
     fwd_hooks_clean = []
@@ -1101,8 +1005,7 @@ def make_hooks_and_matrices_nodes_per_token(model: HookedESM3 | HookedESMC, grap
         try:
             activation_difference[:, :, index] += acts
         except RuntimeError as e:
-            print("Activation Hook Error", hook.name, activation_difference[:, :, index].size(), acts.size(), index)
-            raise e
+            raise RuntimeError(f"Activation hook error at {hook.name}: {e}") from e
     
     def gradient_hook(aggregation:str, abs_per_pos:bool, fwd_index: Union[slice, int], gradients:torch.Tensor, hook):
         """Takes in a gradient and uses it and activation_difference 
@@ -1110,39 +1013,32 @@ def make_hooks_and_matrices_nodes_per_token(model: HookedESM3 | HookedESMC, grap
 
         grads = gradients.detach()
         try:
-            if grads.ndim == 3: #mlp output for example is [batch, pos, hidden] but attention output is [batch, pos, n_heads, hidden]
-                grads = grads.unsqueeze(2) #meaning we get [batch pos 1 hidden] in that case 
-            fwd_diff = activation_difference[:, :, fwd_index] #activation difference for the forward component
-            if fwd_diff.ndim == 3: #attention output for example is [batch, pos, n_heads, hidden] and mlp output is [batch, pos, hidden]
+            if grads.ndim == 3:
+                grads = grads.unsqueeze(2)
+            fwd_diff = activation_difference[:, :, fwd_index]
+            if fwd_diff.ndim == 3:
                 fwd_diff = fwd_diff.unsqueeze(2)
-            #meaning we get [batch pos 1 hidden] in that case
 
             if fwd_diff.shape[2] != grads.shape[2]:
                 raise ValueError(f"fwd_diff shape {fwd_diff.shape} does not match grads shape {grads.shape} for fwd_index {fwd_index}")
-            #print(f"fwd_diff shape {fwd_diff.shape} and grads shape {grads.shape} for fwd_index {fwd_index}")
             for key, mask in masks_dict.items():
                 score_per_pos = einsum(fwd_diff, grads,'batch pos forward hidden, batch pos forward hidden -> batch pos forward') # [batch, pos, forward]
                 temp = None
-                #merge mask with sequence_tokens_mask which is [batch, pos]
                 
                 combined_mask = mask & attention_mask
-                #mask is [batch, pos] , we want to extend it to [batch, pos, forward]
                 combined_mask = combined_mask.unsqueeze(2)
                 combined_mask = combined_mask.float().to(device)
-                #now mask is [batch, pos, 1]
                 score_per_pos = score_per_pos * combined_mask
-                #now score_per_pos is [batch, pos, forward]
                 if abs_per_pos:
                     score_per_pos = score_per_pos.abs()
                 if aggregation == 'sum':
                     s = score_per_pos.sum(dim=(0, 1))
-                elif aggregation == 'pos_mean': #assumes gradients in padding is 0 , therefore the score for padding is 0
+                elif aggregation == 'pos_mean':
                     # average over positions for each example, then sum over batch
                     # shape is [batch, pos, forward]
                     temp = score_per_pos.sum(dim=1)  # now [batch, forward]
-                    #count the number of non-masked positions, the combined mask is [batch, pos, 1]
                     non_masked_positions = combined_mask.squeeze(-1).sum(dim=-1) # [batch]
-                    temp = temp / non_masked_positions.view(-1, 1) #lengths is [batch] so we need to reshape it to [batch, 1]
+                    temp = temp / non_masked_positions.view(-1, 1)
                     s = temp.sum(dim=0)  # [forward]
                 else:
                     raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
@@ -1152,8 +1048,7 @@ def make_hooks_and_matrices_nodes_per_token(model: HookedESM3 | HookedESMC, grap
                 scores_dict[key][fwd_index] += s
 
         except RuntimeError as e:
-            print("Gradient Hook Error", hook.name, activation_difference.size(), grads.size(),fwd_index)
-            raise e
+            raise RuntimeError(f"Gradient hook error at {hook.name}: {e}") from e
 
     for name, node in graph.nodes.items():
         if isinstance(node, AttentionNode):
@@ -1186,7 +1081,10 @@ def get_scores_eap_ig_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Gra
     for clean, corrupted , masked_positions, labels, repeat_locations_list, alignments_list,  sequences_list in dataloader:
         batch_size = len(clean)
         total_items += batch_size
-        tokenizer = get_esm3_model_tokenizers().sequence
+        model_name = model.cfg.model_name
+        if model_name is None:
+            model_name = "esm3" if isinstance(model, HookedESM3) else "esm-c" if isinstance(model, HookedESMC) else "esm3"
+        tokenizer = load_tokenizer_by_model_type(model_name)
         clean_tokens, attention_mask_clean, n_pos , lengths_clean= tokenize_plus(model, clean) 
         corrupted_tokens, attention_mask_corrupted, _ , _= tokenize_plus(model, corrupted)
 
@@ -1213,13 +1111,11 @@ def get_scores_eap_ig_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Gra
         def input_interpolation_hook(k: int):
             def hook_fn(activations, hook):
                 new_input = input_activations_corrupted + (k / steps) * (input_activations_clean - input_activations_corrupted) + activations * 0
-                #new_input.requires_grad = True
                 return new_input
             return hook_fn
 
         total_steps = 0
         for step in range(1, steps+1):
-            print(f"Step {step} of {steps} for item {total_items}")
             total_steps += 1
             with model.hooks(fwd_hooks=[(graph.nodes['input'].out_hook, input_interpolation_hook(step))], bwd_hooks=bwd_hooks):
                 logits = model.forward(
@@ -1228,11 +1124,8 @@ def get_scores_eap_ig_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Gra
                 )
                 masked_positions_tensor = torch.tensor(masked_positions, device=device)
                 labels_tensor = torch.tensor(labels, device=device)
-                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor) #the metric for attribution patching expect clean and corrupted. for eap-ig this is different
-                #print(f"before backword- step{step}, shape:{clean_tokens.shape}")
-                #show_memory()
+                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor)
                 metric_value.backward()
-                #print(f"after backword- step{step}, shape:{clean_tokens.shape}")
                 model.zero_grad(set_to_none=True)  # clear the gradients
 
     assert total_steps == steps, f"total_steps {total_steps} is not equal to steps {steps}"
@@ -1260,7 +1153,6 @@ def attribute_nodes_per_token(model: HookedESM3 | HookedESMC, graph: Graph, data
         out_dir = os.path.dirname(scores_csv_path)
         if out_dir:  # Avoid trying to create '' (empty string) as a directory
             os.makedirs(out_dir, exist_ok=True)
-    #create a dataframe with node name and score keys as column, then we will iterate over each node in graph and add a new row with all scores for that node
     rows = []
     for node in tqdm(graph.nodes.values(), total=len(graph.nodes)):
         if isinstance(node, LogitNode):
@@ -1286,7 +1178,6 @@ def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, gr
     if mean_ablations_cache is not None:
         # Use mean ablations as initialization (clean hooks will subtract from this)
         # Result: mean_ablations - clean (analogous to corrupted - clean)
-        print(f"Using mean ablations- separate_mask_positions: {separate_mask_positions}, masked_positions: {masked_positions}")
         if separate_mask_positions and masked_positions is not None:
             # Initialize with 'exclude_mask' mode (non-masked positions)
             neurons_activations_difference = initialize_activation_difference_with_mean_ablations(
@@ -1324,19 +1215,7 @@ def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, gr
                 use_mode='all'
             )
     else:
-        print(f"Using zeros- separate_mask_positions: {separate_mask_positions}, masked_positions: {masked_positions}")
         neurons_activations_difference = torch.zeros((batch_size, n_pos, graph.n_forward_neurons), device=device, dtype=model.cfg.dtype)
-
-      #sneak peak at the neurons_activations_difference
-    print(f"Neurons: neurons_activations_difference shape: {neurons_activations_difference.shape}")
-    # Print sample values from a few positions and neuron indices
-    if neurons_activations_difference.numel() > 0:
-        print(f"Neurons: Sample values at [batch=0, pos=0, neurons=0:5]: {neurons_activations_difference[0, 0, :5]}")
-        if neurons_activations_difference.shape[1] > 10:
-            print(f"Neurons: Sample values at [batch=0, pos=10, neurons=0:5]: {neurons_activations_difference[0, 10, :5]}")
-        if neurons_activations_difference.shape[2] > 100:
-            print(f"Neurons: Sample values at [batch=0, pos=0, neurons=100:105]: {neurons_activations_difference[0, 0, 100:105]}")
-
 
     fwd_hooks_clean = []
     fwd_hooks_corrupted = []
@@ -1355,8 +1234,7 @@ def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, gr
         try:
             neurons_activations_difference[:, :, index] += acts #[batch, pos, n_neurons_in_layer]
         except RuntimeError as e:
-            print("Activation Hook Error", hook.name, neurons_activations_difference[:, index].size(), acts.size(), index)
-            raise e
+            raise RuntimeError(f"Activation hook error at {hook.name}: {e}") from e
     
     def gradient_hook(lengths, aggregation:str, abs_per_pos:bool, fwd_index: Union[slice, int], gradients:torch.Tensor, hook):
         """Takes in a gradient and uses it and activation_difference 
@@ -1367,11 +1245,9 @@ def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, gr
             target_activations_diff = neurons_activations_difference[:, :, fwd_index] #[batch, pos, n_neurons_in_layer]
             if grads.ndim != 3 or target_activations_diff.ndim != 3:
                 raise ValueError(f"grads shape {grads.shape} or target_activations_diff shape {target_activations_diff.shape} is not 3")
-            # Validate that gradient width matches the selected layer's neuron count
             if grads.shape[2] != target_activations_diff.shape[2]:
                 raise ValueError(f"Mismatch between grads width {grads.shape[2]} and target_activations_diff width {target_activations_diff.shape[2]} for fwd_index {fwd_index}")
 
-            # in our case score per pos per neuron is just per element multiplication of target_activations_diff and grads
 
             score_per_pos = target_activations_diff * grads #[batch, pos, n_neurons_in_layer]
 
@@ -1381,13 +1257,12 @@ def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, gr
             if aggregation == 'sum':
                 s = score_per_pos.sum(dim = (0,1)) #[n_neurons_in_layer]
                 temp = None
-            elif aggregation == 'pos_mean': #assumes gradients in padding is 0 , therefore the score for padding is 0
+            elif aggregation == 'pos_mean':
                 # average over positions for each example, then sum over batch
                 # shape is [batch, pos, n_neurons_in_layer]
                 temp = score_per_pos.sum(dim=1)  # now [batch, n_neurons_in_layer]
-                #we want to divide for each batch: the scores of all neurons by the length of the batch
 
-                temp = temp / lengths.view(-1, 1) #lengths is [batch] so we need to reshape it to [batch, 1]
+                temp = temp / lengths.view(-1, 1)
                 s = temp.sum(dim=0)  # [n_neurons_in_layer]
             else:
                 raise ValueError(f'aggregation must be in {allowed_aggregations}, but got {aggregation}')
@@ -1409,8 +1284,7 @@ def make_hooks_and_matrices_nodes_and_neurons(model: HookedESM3 | HookedESMC, gr
                     raise ValueError(f"Unsupported fwd_index type: {type(fwd_index)}")
 
         except RuntimeError as e:
-            print("Gradient Hook Error", hook.name, neurons_activations_difference.size(), grads.size(),fwd_index)
-            raise e
+            raise RuntimeError(f"Gradient hook error at {hook.name}: {e}") from e
 
     for layer in range(graph.cfg['n_layers']):
 
@@ -1446,11 +1320,8 @@ def get_scores_eap_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph,
     scores_examples_np_arr_neurons = None
     idx_to_example_name_list = None
     if all_examples_scores_npy_path is not None:
-        print(f"total_examples: {total_examples}")
         scores_examples_np_arr = np.zeros((total_examples, graph.n_forward), dtype=np.float32)
         scores_examples_np_arr_neurons = np.zeros((total_examples, graph.n_forward_neurons), dtype=np.float32)
-        print(f"scores_examples_np_arr shape: {scores_examples_np_arr.shape}")
-        print(f"scores_examples_np_arr_neurons shape: {scores_examples_np_arr_neurons.shape}")
         idx_to_example_name_list = []
 
     for clean, corrupted , masked_positions, labels, clean_id_names in dataloader:
@@ -1461,7 +1332,6 @@ def get_scores_eap_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph,
         
         indicies_examples_torch_arr = None
         if all_examples_scores_npy_path is not None:
-            #clean_id_names is a list of strings of length batch_size, we needd to add each elem to the idx_to_example_name_list separately
             length_before = len(idx_to_example_name_list)
             idx_to_example_name_list.extend(clean_id_names)
             length_after = len(idx_to_example_name_list)
@@ -1470,7 +1340,7 @@ def get_scores_eap_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph,
         (fwd_hooks_corrupted, fwd_hooks_clean, bwd_hooks), activation_difference = make_hooks_and_matrices_nodes(model, graph, batch_size, n_pos, 
         scores, device, True, aggregation,abs_per_pos, lengths_clean.to(device), scores_examples_np_arr=scores_examples_np_arr, 
         indicies_examples_torch_arr=indicies_examples_torch_arr, mean_ablations_cache=mean_ablations_cache, 
-        masked_positions=masked_positions, separate_mask_positions=separate_mask_positions) # returns the required hooks + activation differences array but its empty
+        masked_positions=masked_positions, separate_mask_positions=separate_mask_positions)
 
         (fwd_hooks_corrupted_neurons, fwd_hooks_clean_neurons, bwd_hooks_neurons), neurons_activations_difference = make_hooks_and_matrices_nodes_and_neurons(model, graph, batch_size, n_pos, scores_neurons,
          device, True, aggregation,abs_per_pos, lengths_clean.to(device), scores_examples_np_arr_neurons=scores_examples_np_arr_neurons,
@@ -1478,7 +1348,6 @@ def get_scores_eap_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph,
          masked_positions=masked_positions, separate_mask_positions=separate_mask_positions)
         
         with torch.no_grad():
-            # Skip corrupted forward pass if using mean ablations (already initialized with -mean)
             if mean_ablations_cache is None:
                 with model.hooks(fwd_hooks=(fwd_hooks_corrupted + fwd_hooks_corrupted_neurons)):
                     _ = model.forward(
@@ -1486,7 +1355,7 @@ def get_scores_eap_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph,
                             sequence_id=attention_mask_corrupted.to(device)
                         )
             else:
-                print("Using mean ablations- skipping corrupted forward pass")
+                pass
             if are_clean_logits_needed:
                 clean_logits = model.forward(
                         sequence_tokens=clean_tokens.to(device),
@@ -1536,16 +1405,11 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
     scores_examples_np_arr_neurons = None
     idx_to_example_name_list = None
     if all_examples_scores_npy_path is not None:
-        print(f"total_examples: {total_examples}")
         scores_examples_np_arr = np.zeros((total_examples, graph.n_forward), dtype=np.float32)
         scores_examples_np_arr_neurons = np.zeros((total_examples, graph.n_forward_neurons), dtype=np.float32)
-        print(f"scores_examples_np_arr shape: {scores_examples_np_arr.shape}")
-        print(f"scores_examples_np_arr_neurons shape: {scores_examples_np_arr_neurons.shape}")
         idx_to_example_name_list = []
 
     for clean, corrupted , masked_positions, labels, clean_id_names in dataloader:
-        #print(f"memory for example {total_items} - begin")
-        #show_memory()
         batch_size = len(clean)
         total_items += batch_size
 
@@ -1554,7 +1418,6 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
     
         indicies_examples_torch_arr = None
         if all_examples_scores_npy_path is not None:
-            #clean_id_names is a list of strings of length batch_size, we needd to add each elem to the idx_to_example_name_list separately
             length_before = len(idx_to_example_name_list)
             idx_to_example_name_list.extend(clean_id_names)
             length_after = len(idx_to_example_name_list)
@@ -1571,7 +1434,6 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
          masked_positions=masked_positions, separate_mask_positions=separate_mask_positions)
         
         with torch.inference_mode():
-            # Skip corrupted forward pass if using mean ablations
             if mean_ablations_cache is None:
                 with model.hooks(fwd_hooks=(fwd_hooks_corrupted + fwd_hooks_corrupted_neurons)):
                     _ = model.forward(
@@ -1579,7 +1441,7 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
                             sequence_id=attention_mask_corrupted.to(device)
                         )
             else:
-                print("Using mean ablations- skipping corrupted forward pass")
+                pass
 
             input_activations_corrupted = activation_difference[:, :, graph.forward_index(graph.nodes['input'])].clone()
        
@@ -1595,7 +1457,6 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
         def input_interpolation_hook(k: int):
             def hook_fn(activations, hook):
                 new_input = input_activations_corrupted + (k / steps) * (input_activations_clean - input_activations_corrupted) + activations * 0
-                #new_input.requires_grad = True
                 return new_input
             return hook_fn
 
@@ -1609,11 +1470,8 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
                 )
                 masked_positions_tensor = torch.tensor(masked_positions, device=device)
                 labels_tensor = torch.tensor(labels, device=device)
-                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor) #the metric for attribution patching expect clean and corrupted. for eap-ig this is different
-                #print(f"before backword- step{step}, shape:{clean_tokens.shape}")
-                #show_memory()
+                metric_value = metric(logits, clean_logits, masked_positions_tensor, labels_tensor)
                 metric_value.backward()
-                #print(f"after backword- step{step}, shape:{clean_tokens.shape}")
                 model.zero_grad(set_to_none=True)  # clear the gradients
 
     assert total_steps == steps, f"total_steps {total_steps} is not equal to steps {steps}"
@@ -1628,9 +1486,6 @@ def get_scores_eap_ig_neurons(model: HookedESM3 | HookedESMC, graph: NeuronGraph
         save_path = Path(all_examples_scores_npy_path)
         scores_examples_np_arr = scores_examples_np_arr / total_steps
         scores_examples_np_arr_neurons = scores_examples_np_arr_neurons / total_steps
-        print(f"scores_examples_np_arr shape: {scores_examples_np_arr.shape}")
-        print(f"scores_examples_np_arr_neurons shape: {scores_examples_np_arr_neurons.shape}")
-        print(f"idx_to_example_name_list length: {len(idx_to_example_name_list)}")
         np.savez_compressed(save_path,
          scores_nodes=scores_examples_np_arr,
          scores_neurons=scores_examples_np_arr_neurons,
