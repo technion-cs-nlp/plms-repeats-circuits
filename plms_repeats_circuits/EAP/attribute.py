@@ -1,3 +1,5 @@
+# Based on: https://github.com/hannamw/EAP-IG/blob/0edbdd72e3683db69c363a23deb1775f44ec8376/eap/attribute.py
+
 from typing import Callable, List, Union, Optional,Literal
 from functools import partial
 import torch
@@ -13,10 +15,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from protein_circuits.utils.protein_similiarity_utils import analyze_repeat_positions, RepeatPositionData
+from plms_repeats_circuits.utils.protein_similiarity_utils import analyze_repeat_positions, RepeatPositionData
 from esm.tokenization import get_esm3_model_tokenizers
 import os
-from protein_circuits.utils.esm3_utils import load_tokenizer
+from plms_repeats_circuits.utils.esm_utils import load_tokenizer
 
 def load_mean_ablations(mean_ablations_dir: str, device, separate_mask_positions: bool):
     """

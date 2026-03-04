@@ -1,3 +1,5 @@
+#Based on: https://github.com/hannamw/EAP-IG/blob/0edbdd72e3683db69c363a23deb1775f44ec8376/eap/evaluate_graph.py
+
 from typing import Callable, List, Union
 from functools import partial 
 import torch

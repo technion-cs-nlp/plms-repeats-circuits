@@ -1,3 +1,4 @@
+# Based on code from https://github.com/hannamw/EAP-IG/blob/0edbdd72e3683db69c363a23deb1775f44ec8376/eap/graph.py 
 from typing import List, Dict, Union, Tuple, Literal, Optional, Set, Type
 from collections import defaultdict
 from pathlib import Path 
@@ -8,9 +9,6 @@ import torch
 from transformer_lens import HookedESM3, SupportedESM3Config, HookedTransformerConfig, HookedESMC, SupportedESMCConfig
 from transformer_lens.components.mlps.esm3_hooked_mlp import swiglu_correction_fn
 import numpy as np
-from .visualization import EDGE_TYPE_COLORS, generate_random_color
-import pygraphviz as pgv
-# all taken from here https://github.com/hannamw/EAP-IG/blob/0edbdd72e3683db69c363a23deb1775f44ec8376/eap/graph.py 
 import warnings
 
 class Node:
@@ -589,50 +587,6 @@ class Graph:
                 return False
         return True
 
-    def to_graphviz(
-        self,
-        colorscheme: str = "Pastel2",
-        minimum_penwidth: float = 0.6,
-        maximum_penwidth: float = 5.0,
-        layout: str="dot",
-        seed: Optional[int] = None
-    ) -> pgv.AGraph:
-        """
-        Convert the graph to a pygraphviz graph object for visualization.
-        Colorscheme: a cmap colorscheme
-        """
-        g = pgv.AGraph(directed=True, bgcolor="white", overlap="false", splines="true", layout=layout)
-
-        if seed is not None:
-            np.random.seed(seed)
-
-        colors = {node.name: generate_random_color(colorscheme) for node in self.nodes.values()}
-
-        for node in self.nodes.values():
-            if node.in_graph:
-                g.add_node(node.name, 
-                        fillcolor=colors[node.name], 
-                        color="black", 
-                        style="filled, rounded",
-                        shape="box", 
-                        fontname="Helvetica",
-                        )
-
-        scores = self.get_scores().abs()
-        max_score = scores.max().item()
-        min_score = scores.min().item()
-        for edge in self.edges.values():
-            if edge.in_graph:
-                score = 0 if edge.score is None else edge.score
-                normalized_score = (abs(score) - min_score) / (max_score - min_score) if max_score != min_score else abs(score)
-                penwidth = max(minimum_penwidth, normalized_score * maximum_penwidth)
-                g.add_edge(edge.parent.name,
-                        edge.child.name,
-                        penwidth=str(penwidth),
-                        color=edge.get_color(),
-                        )
-        return g
-    
     def get_attention_nodes_names_in_graph(self):
         return [node.name for node in self.nodes.values() if isinstance(node, AttentionNode) and node.in_graph]
     
@@ -1105,11 +1059,6 @@ class NeuronGraph(Graph):
 
         
         return True
-
-    def to_graphviz(self, colorscheme: str = "Pastel2", minimum_penwidth: float = 0.6, maximum_penwidth: float = 5.0, layout: str="dot", seed: Optional[int] = None) -> pgv.AGraph:
-
-        raise NotImplementedError("NeuronGraph does not support to_graphviz")
-
 
     def set_node_state(self, node_name, in_graph: bool):
         self.nodes[node_name].in_graph = in_graph
