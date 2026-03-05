@@ -1,7 +1,23 @@
 import argparse
 import csv
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass
+class CircuitInfo:
+    """Circuit metadata for compare steps."""
+
+    repeat_type: str
+    model_type: str
+    seed: int
+    method: str
+    circuit_id: str
+    json_path: Path
+    circuit_size: int | float
+    task_name: str
+    circuit_selection_method: str
 
 from plms_repeats_circuits.utils.counterfactuals_config import (
     COUNTERFACTUAL_METHODS,
@@ -17,6 +33,8 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from run_attribution_patching_nodes_edges import main as run_nodes_edges_main
 from run_attribution_patching_neurons import main as run_neurons_main
+from run_iou_recall import main as run_iou_recall_main
+from run_cross_task import main as run_cross_task_main
 
 # Discover step params (aligned with smart_attribution_launcher.py)
 DISCOVER_ATTRIBUTION_METHOD = "EAP-IG"
@@ -189,6 +207,231 @@ def _find_matching_nodes_circuit(
     return matches[0]
 
 
+def _find_circuit_json(output_dir: Path, circuit_id: str, exp_prefix: str) -> Path | None:
+    """Find circuit JSON by circuit_id and exp_prefix. Returns None if not found."""
+    pattern = f"{exp_prefix}_circuit{circuit_id}_*.json"
+    candidates = list(output_dir.glob(pattern))
+    return candidates[0] if candidates else None
+
+
+def _enumerate_circuits_for_compare(
+    results_root: Path,
+    datasets_root: Path,
+    repeat_types: list[str],
+    model_types: list[str],
+    seeds: list[int],
+    methods: list[str],
+    graph_type: str,
+) -> list[CircuitInfo]:
+    """
+    Enumerate circuits for compare steps. graph_type must be edges or nodes.
+    """
+    circuits = []
+    for rt in repeat_types:
+        for mt in model_types:
+            circuit_dir = _circuit_discovery_dir(datasets_root, rt, mt)
+            for seed in seeds:
+                output_dir = _output_dir(results_root, rt, mt, graph_type, seed)
+                info_path = output_dir / f"circuit_info_{graph_type}.csv"
+                if not info_path.exists():
+                    print(f"Skipping (no circuit_info): {info_path}", flush=True)
+                    continue
+                with open(info_path) as f:
+                    rows = list(csv.DictReader(f))
+                for method in methods:
+                    path = find_file_for_method(method, circuit_dir, kind="main", ext="csv")
+                    if path is None:
+                        print(f"Skipping (no dataset for method): {method} in {circuit_dir}", flush=True)
+                        continue
+                    exp_prefix = path.stem
+                    for row in rows:
+                        cid = row.get("circuit_id")
+                        if not cid:
+                            print(f"Skipping (no circuit_id in row): {info_path} row={dict(row)}", flush=True)
+                            continue
+                        json_path = _find_circuit_json(output_dir, cid, exp_prefix)
+                        if json_path is None:
+                            print(f"Skipping (no JSON for circuit): cid={cid} exp_prefix={exp_prefix} in {output_dir}", flush=True)
+                            continue
+                        if graph_type == "edges":
+                            sz = row.get("real_n_edges")
+                        else:
+                            sz = row.get("real_n_nodes")
+                        try:
+                            circuit_size = int(float(sz)) if sz is not None else 1
+                        except (ValueError, TypeError):
+                            circuit_size = 1
+                        task_name = f"{rt}_{method}_{seed}"
+                        sel_method = row.get("circuit_selection_method") or (
+                            "greedy_abs" if graph_type == "edges" else "top_n_abs"
+                        )
+                        circuits.append(
+                            CircuitInfo(
+                                repeat_type=rt,
+                                model_type=mt,
+                                seed=seed,
+                                method=method,
+                                circuit_id=cid,
+                                json_path=json_path,
+                                circuit_size=circuit_size,
+                                task_name=task_name,
+                                circuit_selection_method=sel_method,
+                            )
+                        )
+    return circuits
+
+
+def run_compare_iou_recall(
+    datasets_root: Path,
+    results_root: Path,
+    repeat_types: list[str],
+    model_types: list[str],
+    seeds: list[int],
+    graph_type: str,
+    methods: list[str],
+    metric: str = "iou",
+    compare_modes: list[str] | None = None,
+) -> None:
+    """Run IOU/recall comparison for across_counterfactual and across_repeats modes."""
+    if graph_type not in ("edges", "nodes"):
+        raise ValueError(f"compare_iou_recall requires graph_type edges or nodes, got {graph_type}")
+    if compare_modes is None:
+        compare_modes = ["across_counterfactual", "across_repeats"]
+
+    all_circuits = _enumerate_circuits_for_compare(
+        results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
+    )
+    if not all_circuits:
+        print("No circuits found for compare_iou_recall. Run discover first.", flush=True)
+        return
+
+    def _run_pair(c1: CircuitInfo, c2: CircuitInfo, out_csv: Path) -> None:
+        run_iou_recall_main(
+            circuit_json_1=str(c1.json_path),
+            circuit_json_2=str(c2.json_path),
+            graph_type=graph_type,
+            save_results_csv=str(out_csv),
+            metric=metric,
+            circuit_size_1=c1.circuit_size,
+            circuit_size_2=c2.circuit_size,
+            circuit_selection_method_1=c1.circuit_selection_method,
+            circuit_selection_method_2=c2.circuit_selection_method,
+            source_task_name=c1.task_name,
+            source_circuit_id=c1.circuit_id,
+            target_task_name=c2.task_name,
+            target_circuit_id=c2.circuit_id,
+        )
+
+    if "across_counterfactual" in compare_modes:
+        for rt in repeat_types:
+            for mt in model_types:
+                for seed in seeds:
+                    group = [c for c in all_circuits if c.repeat_type == rt and c.model_type == mt and c.seed == seed]
+                    if len(group) < 2:
+                        continue
+                    out_dir = results_root / "circuit_discovery_compare" / "iou_recall" / "across_counterfactual" / rt / mt / graph_type / f"seed_{seed}"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_csv = out_dir / f"{metric}_results.csv"
+                    for i, c1 in enumerate(group):
+                        for j, c2 in enumerate(group):
+                            _run_pair(c1, c2, out_csv)
+
+    if "across_repeats" in compare_modes:
+        for mt in model_types:
+            for seed in seeds:
+                for method in methods:
+                    group = [c for c in all_circuits if c.model_type == mt and c.seed == seed and c.method == method]
+                    if len(group) < 2:
+                        continue
+                    out_dir = results_root / "circuit_discovery_compare" / "iou_recall" / "across_repeats" / mt / graph_type / f"seed_{seed}" / method
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_csv = out_dir / f"{metric}_results.csv"
+                    for i, c1 in enumerate(group):
+                        for j, c2 in enumerate(group):
+                            _run_pair(c1, c2, out_csv)
+
+
+def run_compare_cross_task(
+    datasets_root: Path,
+    results_root: Path,
+    repeat_types: list[str],
+    model_types: list[str],
+    seeds: list[int],
+    graph_type: str,
+    methods: list[str],
+    n_examples: int = 1000,
+    compare_modes: list[str] | None = None,
+) -> None:
+    """Run cross-task faithfulness comparison for across_counterfactual and across_repeats modes."""
+    if graph_type not in ("edges", "nodes"):
+        raise ValueError(f"compare_cross_task requires graph_type edges or nodes, got {graph_type}")
+    if compare_modes is None:
+        compare_modes = ["across_counterfactual", "across_repeats"]
+
+    all_circuits = _enumerate_circuits_for_compare(
+        results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
+    )
+    if not all_circuits:
+        print("No circuits found for compare_cross_task. Run discover first.", flush=True)
+        return
+
+    circuit_dir_fn = _circuit_discovery_dir
+
+    def _run_pair(c1: CircuitInfo, c2: CircuitInfo, out_csv: Path) -> None:
+        csv_dir = circuit_dir_fn(datasets_root, c2.repeat_type, c2.model_type)
+        target_path = find_file_for_method(c2.method, csv_dir, kind="main", ext="csv")
+        if target_path is None:
+            return
+        output_dir = results_root / "circuit_discovery_compare" / "cross_task" / "temp" / f"{c1.circuit_id}_to_{c2.circuit_id}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        run_cross_task_main(
+            source_task_name=c1.task_name,
+            source_circuit_id=c1.circuit_id,
+            source_circuit_json=str(c1.json_path),
+            target_task_name=c2.task_name,
+            target_circuit_id=c2.circuit_id,
+            target_csv_path=str(target_path),
+            save_results_csv=str(out_csv),
+            output_dir=str(output_dir),
+            total_n_samples=n_examples,
+            model_type=c2.model_type,
+            graph_type=graph_type,
+            random_state=c2.seed,
+            n_components_in_circuit_list=[1.0],
+            metric="log_prob",
+            attribution_patching_method=DISCOVER_ATTRIBUTION_METHOD,
+            circuit_selection_method=c1.circuit_selection_method,
+        )
+
+    if "across_counterfactual" in compare_modes:
+        for rt in repeat_types:
+            for mt in model_types:
+                for seed in seeds:
+                    group = [c for c in all_circuits if c.repeat_type == rt and c.model_type == mt and c.seed == seed]
+                    if len(group) < 2:
+                        continue
+                    out_dir = results_root / "circuit_discovery_compare" / "cross_task" / "across_counterfactual" / rt / mt / graph_type / f"seed_{seed}"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_csv = out_dir / "cross_task_results.csv"
+                    for i, c1 in enumerate(group):
+                        for c2 in group:
+                            _run_pair(c1, c2, out_csv)
+
+    if "across_repeats" in compare_modes:
+        for mt in model_types:
+            for seed in seeds:
+                for method in methods:
+                    group = [c for c in all_circuits if c.model_type == mt and c.seed == seed and c.method == method]
+                    if len(group) < 2:
+                        continue
+                    out_dir = results_root / "circuit_discovery_compare" / "cross_task" / "across_repeats" / mt / graph_type / f"seed_{seed}" / method
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_csv = out_dir / "cross_task_results.csv"
+                    for i, c1 in enumerate(group):
+                        for c2 in group:
+                            _run_pair(c1, c2, out_csv)
+
+
 def run_discover(
     datasets_root: Path,
     results_root: Path,
@@ -315,7 +558,7 @@ def main():
         "--steps",
         nargs="+",
         default=["discover"],
-        choices=["discover"],
+        choices=["discover", "compare_cross_task", "compare_iou_recall"],
         help="Steps to run",
     )
     parser.add_argument(
@@ -357,6 +600,20 @@ def main():
         default=1000,
         help="Samples per run",
     )
+    parser.add_argument(
+        "--compare_modes",
+        nargs="+",
+        default=["across_counterfactual", "across_repeats"],
+        choices=["across_counterfactual", "across_repeats"],
+        help="Modes for compare steps (default: across_counterfactual across_repeats)",
+    )
+    parser.add_argument(
+        "--compare_metric",
+        type=str,
+        default="iou",
+        choices=["iou", "recall"],
+        help="Metric for compare_iou_recall (default: iou)",
+    )
     args = parser.parse_args()
 
     datasets_root = args.datasets_root.resolve()
@@ -382,8 +639,47 @@ def main():
         )
         print("=== Step: discover done ===\n", flush=True)
 
+    if "compare_iou_recall" in args.steps:
+        if args.graph_type not in ("edges", "nodes"):
+            raise ValueError(
+                "compare_iou_recall requires graph_type edges or nodes; neurons graph type is not supported"
+            )
+        print("\n=== Step: compare_iou_recall ===", flush=True)
+        run_compare_iou_recall(
+            datasets_root=datasets_root,
+            results_root=results_root,
+            repeat_types=args.repeat_types,
+            model_types=args.model_types,
+            seeds=args.seeds,
+            graph_type=args.graph_type,
+            methods=args.methods,
+            metric=args.compare_metric,
+            compare_modes=args.compare_modes,
+        )
+        print("=== Step: compare_iou_recall done ===\n", flush=True)
+
+    if "compare_cross_task" in args.steps:
+        if args.graph_type not in ("edges", "nodes"):
+            raise ValueError(
+                "compare_cross_task requires graph_type edges or nodes; neurons graph type is not supported"
+            )
+        print("\n=== Step: compare_cross_task ===", flush=True)
+        run_compare_cross_task(
+            datasets_root=datasets_root,
+            results_root=results_root,
+            repeat_types=args.repeat_types,
+            model_types=args.model_types,
+            seeds=args.seeds,
+            graph_type=args.graph_type,
+            methods=args.methods,
+            n_examples=args.n_examples,
+            compare_modes=args.compare_modes,
+        )
+        print("=== Step: compare_cross_task done ===\n", flush=True)
+
     print("Done.", flush=True)
 
 
 if __name__ == "__main__":
+    sys.setrecursionlimit(3000)
     main()

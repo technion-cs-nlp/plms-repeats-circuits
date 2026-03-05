@@ -574,7 +574,8 @@ class Graph:
                 return False
             sa, sb = node.score, other.nodes[name].score
             if sa is None and sb is None:
-                warnings.warn(f"Node {name}: both scores are None")
+                if self.graph_type == GraphType.Nodes:
+                    warnings.warn(f"Node {name}: both scores are None")
                 continue
             if sa is None or sb is None:
                 return False
