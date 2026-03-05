@@ -110,9 +110,9 @@ def main(
 
     # Map DataFrame columns to (n, real_n, pct, real_pct, faithfulness_by_mean)
     if graph_type == "edges":
-        n_col, real_col, pct_col = "n_edges", "real_n_edges", "real_pct_n_edges"
+        n_col, real_col, pct_col, real_pct_col = "n_edges", "real_n_edges", "pct_n_edges", "real_pct_n_edges"
     else:
-        n_col, real_col, pct_col = "n_nodes", "real_n_nodes", "real_pct_n_nodes"
+        n_col, real_col, pct_col, real_pct_col = "n_nodes", "real_n_nodes", "pct_n_nodes", "real_pct_n_nodes"
 
     csv_dir = os.path.dirname(save_results_csv)
     if csv_dir and not os.path.exists(csv_dir):
@@ -123,15 +123,16 @@ def main(
         w = csv.writer(f)
         if write_header:
             if graph_type == "edges":
-                w.writerow(["source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_edges", "real_n_edges", "real_pct_edges", "faithfulness_by_mean"])
+                w.writerow(["source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_edges", "real_n_edges", "pct_edges", "real_pct_edges", "faithfulness_by_mean"])
             else:
-                w.writerow(["source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_nodes", "real_n_nodes", "real_pct_nodes", "faithfulness_by_mean"])
+                w.writerow(["source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_nodes", "real_n_nodes", "pct_nodes", "real_pct_nodes", "faithfulness_by_mean"])
         for _, row in df.iterrows():
             n = row[n_col]
             real_n = row[real_col]
-            real_pct = row[pct_col]
+            pct = row[pct_col]
+            real_pct = row[real_pct_col]
             faithfulness = row["faithfulness_by_mean"]
-            w.writerow([source_task_name, source_circuit_id, target_task_name, target_circuit_id, n, real_n, real_pct, faithfulness])
+            w.writerow([source_task_name, source_circuit_id, target_task_name, target_circuit_id, n, real_n, pct, real_pct, faithfulness])
 
     log.info(f"Cross-task results appended to {save_results_csv}")
 

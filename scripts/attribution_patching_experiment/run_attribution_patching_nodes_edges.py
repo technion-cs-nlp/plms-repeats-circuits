@@ -275,12 +275,12 @@ def main(
         if save_results_csv and csv_file and csv_file.tell() == 0:
             if graph_type == "edges":
                 writer.writerow([
-                    "n_edges_input", "n_edges", "real_n_edges", "real_pct_n_edges", "circuit_selection_method",
+                    "n_edges_input", "n_edges", "pct_n_edges", "real_n_edges", "real_pct_n_edges", "circuit_selection_method",
                     "clean_mean", "corrupted_mean", "circuit_mean", "faithfulness_by_mean", "faithfulness_per_element",
                 ])
             else:
                 writer.writerow([
-                    "n_nodes_input", "n_nodes", "real_n_nodes", "real_pct_n_nodes", "circuit_selection_method",
+                    "n_nodes_input", "n_nodes", "pct_n_nodes", "real_n_nodes", "real_pct_n_nodes", "circuit_selection_method",
                     "clean_mean", "corrupted_mean", "circuit_mean", "faithfulness_by_mean", "faithfulness_per_element",
                 ])
 
@@ -307,6 +307,7 @@ def main(
                 continue
 
             real_n = g.count_included_edges() if graph_type == "edges" else g.count_included_nodes()
+            pct = n / total
             real_pct = real_n / total
 
             if graph_type == "edges":
@@ -349,7 +350,7 @@ def main(
             circuit_mean = circuit_evaluation.mean().item()
 
             row = [
-                n_input, n, real_n, real_pct, circuit_selection_method,
+                n_input, n, pct, real_n, real_pct, circuit_selection_method,
                 clean_mean, corrupted_mean, circuit_mean,
                 faithfulness_by_mean, faithfulness_per_elem,
             ]
@@ -400,9 +401,9 @@ def main(
 
     # Return results as DataFrame
     cols = (
-        ["n_edges_input", "n_edges", "real_n_edges", "real_pct_n_edges", "circuit_selection_method"]
+        ["n_edges_input", "n_edges", "pct_n_edges", "real_n_edges", "real_pct_n_edges", "circuit_selection_method"]
         if graph_type == "edges"
-        else ["n_nodes_input", "n_nodes", "real_n_nodes", "real_pct_n_nodes", "circuit_selection_method"]
+        else ["n_nodes_input", "n_nodes", "pct_n_nodes", "real_n_nodes", "real_pct_n_nodes", "circuit_selection_method"]
     )
     cols += ["clean_mean", "corrupted_mean", "circuit_mean", "faithfulness_by_mean", "faithfulness_per_element"]
     return pd.DataFrame(rows, columns=cols)
