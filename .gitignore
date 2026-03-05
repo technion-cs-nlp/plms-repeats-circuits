@@ -22,6 +22,11 @@ scripts/evaluation_experiment/run_evaluate_sbatch.sh
 datasets2
 
 results2/
+results3/
+results4/
+results5/
+results6/
+results7/
 
 scripts/evaluation_experiment/verify_predictions_vs_source.py
 scripts/evaluation_experiment/verify_filtered_datasets.py
@@ -32,3 +37,6 @@ scripts/counterfactual_experiment/verify_results_vs_source.py
 py-sbatch-h200.sh
 scripts/counterfactual_experiment/verify_circuit_discovery_vs_legacy.py
 scripts/attribution_patching_experiment/generate_compare_commands.py
+scripts/attribution_patching_experiment/compare_old_new_outputs.py
+py-sbatch-dep.sh
+scripts/attribution_patching_experiment/run_nodes_then_neurons.py

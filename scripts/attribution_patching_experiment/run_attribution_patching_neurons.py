@@ -48,6 +48,7 @@ def _build_neurons_graph_with_attribution(
     abs_score: bool,
     EAP_IG_steps: int,
     device,
+    all_examples_scores_npy_path: str | None = None,
 ) -> tuple[NeuronGraph, int, int]:
     """Load nodes graph, create NeuronGraph, run attribution, verify scores, select top n_nodes, save graph."""
     nodes_graph = Graph.from_json(Path(nodes_graph_json))
@@ -66,7 +67,7 @@ def _build_neurons_graph_with_attribution(
         abs_per_pos=abs_score,
         are_clean_logits_needed=False,
         eap_ig_steps=EAP_IG_steps,
-        all_examples_scores_npy_path=None,
+        all_examples_scores_npy_path=all_examples_scores_npy_path,
     )
     for name, node in nodes_graph.nodes.items():
         ng_node = neurons_graph.nodes.get(name)
@@ -110,6 +111,7 @@ def main(
     random_state: int = 42,
     train_ratio: float = 0.5,
     exp_prefix: str = "",
+    save_scores_per_example_npy: bool = False,
     enable_min_circuit_search: bool = False,
     min_circuit_size: float = -1,
     max_circuit_size: float = -1,
@@ -151,6 +153,12 @@ def main(
         exp_prefix=exp_prefix or None,
     )
 
+    all_examples_scores_npy_path = (
+        str(output_dir / f"{experiment_name}_scores_per_example.npy")
+        if save_scores_per_example_npy
+        else None
+    )
+
     log_file = output_dir / f"{experiment_name}.log"
     logging.basicConfig(
         filename=str(log_file),
@@ -178,6 +186,7 @@ def main(
         ("random_state", random_state),
         ("train_ratio", train_ratio),
         ("exp_prefix", exp_prefix),
+        ("save_scores_per_example_npy", save_scores_per_example_npy),
         ("enable_min_circuit_search", enable_min_circuit_search),
         ("min_circuit_size", min_circuit_size),
         ("max_circuit_size", max_circuit_size),
@@ -219,6 +228,7 @@ def main(
         abs_score=abs_score,
         EAP_IG_steps=EAP_IG_steps,
         device=device,
+        all_examples_scores_npy_path=all_examples_scores_npy_path,
     )
 
     test_ds = EAPDataset(test_df)
@@ -388,6 +398,11 @@ def _parse_args():
     parser.add_argument("--random_state", type=int, default=42, help="Random seed for train/test split.")
     parser.add_argument("--train_ratio", type=float, default=0.5, help="Fraction of data for train.")
     parser.add_argument("--exp_prefix", type=str, default="", help="Prefix for experiment name in filenames.")
+    parser.add_argument(
+        "--save_scores_per_example_npy",
+        action="store_true",
+        help="Save per-example attribution scores to NPY, see EAP documentation.",
+    )
     parser.add_argument(
         "--enable_min_circuit_search",
         action="store_true",

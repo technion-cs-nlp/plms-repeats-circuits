@@ -114,13 +114,6 @@ class Edge:
         else:
             self.index = child.index
             self.hook = child.in_hook
-    def get_color(self):
-        if self.qkv is not None:
-            return EDGE_TYPE_COLORS[self.qkv]
-        elif self.score < 0: 
-            return "#FF0000" #red
-        else:
-            return "#000000" #black
 
     def __eq__(self, other):
         return self.name == other.name
@@ -579,11 +572,26 @@ class Graph:
         for name, node in self.nodes.items():
             if node.in_graph != other.nodes[name].in_graph:
                 return False
-            if node.score != None and other.nodes[name].score != None and not np.allclose(node.score, other.nodes[name].score):
+            sa, sb = node.score, other.nodes[name].score
+            if sa is None and sb is None:
+                warnings.warn(f"Node {name}: both scores are None")
+                continue
+            if sa is None or sb is None:
+                return False
+            if not np.allclose(np.asarray(sa, dtype=float), np.asarray(sb, dtype=float)):
                 return False
          #asserting the edges has same in_graph edges   
         for name, edge in self.edges.items():
-            if (edge.in_graph != other.edges[name].in_graph) or not np.allclose(edge.score, other.edges[name].score):
+            if edge.in_graph != other.edges[name].in_graph:
+                return False
+            sa, sb = edge.score, other.edges[name].score
+            if sa is None and sb is None:
+                if self.graph_type == GraphType.Edges:
+                    warnings.warn(f"Edge {name}: both scores are None")
+                continue
+            if sa is None or sb is None:
+                return False
+            if not np.allclose(np.asarray(sa, dtype=float), np.asarray(sb, dtype=float)):
                 return False
         return True
 
@@ -1041,20 +1049,29 @@ class NeuronGraph(Graph):
         for name, node in self.nodes.items():
             if node.in_graph != other.nodes[name].in_graph:
                 return False
-            
-            if node.score != None and other.nodes[name].score != None and node.score != other.nodes[name].score:
+
+            sa, sb = node.score, other.nodes[name].score
+            if sa is None and sb is None:
+                warnings.warn(f"NeuronGraph node {name}: both scores are None")
+            elif sa is None or sb is None:
                 return False
-            
+            else:
+                a = sa if isinstance(sa, torch.Tensor) else torch.as_tensor(sa, dtype=torch.float64)
+                b = sb if isinstance(sb, torch.Tensor) else torch.as_tensor(sb, dtype=torch.float64)
+                if not torch.allclose(a, b):
+                    return False
+
             if isinstance(node, MLPWithNeuronNode):
                 if not torch.equal(
                     node.neurons_indicies_in_graph, other.nodes[name].neurons_indicies_in_graph
                 ):
                     return False
-                if (
-                    node.neurons_scores is not None
-                    and other.nodes[name].neurons_scores is not None
-                    and not torch.allclose(node.neurons_scores, other.nodes[name].neurons_scores)
-                ):
+                nsa, nsb = node.neurons_scores, other.nodes[name].neurons_scores
+                if nsa is None and nsb is None:
+                    warnings.warn(f"NeuronGraph node {name}: both neurons_scores are None")
+                elif nsa is None or nsb is None:
+                    return False
+                elif not torch.allclose(nsa, nsb):
                     return False
 
         

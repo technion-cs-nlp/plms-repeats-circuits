@@ -118,6 +118,7 @@ Finds circuits at the **neuron** level (individual units inside MLP layers). Mus
 | `--random_state` | int | 42 | Random seed for train/test split. |
 | `--train_ratio` | float | 0.5 | Fraction of data for train. |
 | `--exp_prefix` | str | "" | Prefix for experiment name in filenames. |
+| `--save_scores_per_example_npy` | flag | False | Save per-example attribution scores to NPY: `{experiment_name}_scores_per_example.npy`. |
 | `--enable_min_circuit_search` | flag | False | Binary search for minimal neuron circuit within threshold. |
 | `--min_circuit_size` | float | -1 | Min circuit size for neuron search. ≥1=count, &lt;1=fraction, -1=infer. |
 | `--max_circuit_size` | float | -1 | Max circuit size for neuron search. Same rules as min. |
@@ -130,6 +131,7 @@ Finds circuits at the **neuron** level (individual units inside MLP layers). Mus
 | `{experiment_name}.log` | Log file |
 | `{experiment_name}_neurons.csv` | Faithfulness by neuron circuit size |
 | `{experiment_name}.json` | Neurons graph (saved after attribution and node selection) |
+| `{experiment_name}_scores_per_example.npy` | Per-example attribution scores (only if `--save_scores_per_example_npy`) |
 | `circuit_info_neurons.csv` | Minimal neuron circuit from binary search (only if `--enable_min_circuit_search`) |
 
 ### Example
