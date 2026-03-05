@@ -187,12 +187,34 @@ def main(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
-    try:
-        with open(log_file, "w") as f:
-            f.write("Logging test\n")
-    except Exception as e:
-        print(f"Error writing log file: {e}")
-
+    for k, v in (
+        ("csv_path", csv_path),
+        ("output_dir", str(output_dir)),
+        ("total_n_samples", total_n_samples),
+        ("model_type", model_type),
+        ("graph_type", graph_type),
+        ("attribution_patching_method", attribution_patching_method),
+        ("circuit_selection_method", circuit_selection_method),
+        ("n_components_in_circuit_list", n_components_in_circuit_list),
+        ("metric", metric),
+        ("abs_score", abs_score),
+        ("aggregation_method", aggregation_method),
+        ("circuit_json_path", circuit_json_path),
+        ("EAP_IG_steps", EAP_IG_steps),
+        ("batch_size", batch_size),
+        ("random_state", random_state),
+        ("train_ratio", train_ratio),
+        ("exp_prefix", exp_prefix),
+        ("enable_min_circuit_search", enable_min_circuit_search),
+        ("min_performance_threshold", min_performance_threshold),
+        ("max_performance_threshold", max_performance_threshold),
+        ("min_circuit_size", min_circuit_size),
+        ("max_circuit_size", max_circuit_size),
+        ("max_search_steps", max_search_steps),
+        ("save_results_csv", save_results_csv),
+        ("save_scores_per_example_npy", save_scores_per_example_npy),
+    ):
+        logging.info("%s=%s", k, v)
     logging.info(f"Starting run_attribution_patching_nodes_edges, experiment_name={experiment_name}")
 
     device = get_device()

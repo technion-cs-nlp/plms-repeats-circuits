@@ -31,3 +31,4 @@ py-sbatch.sh
 scripts/counterfactual_experiment/verify_results_vs_source.py
 py-sbatch-h200.sh
 scripts/counterfactual_experiment/verify_circuit_discovery_vs_legacy.py
+scripts/attribution_patching_experiment/generate_compare_commands.py

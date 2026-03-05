@@ -160,10 +160,10 @@ def build_experiment_name(
         f"seed{random_state}",
         attribution_patching_method,
         circuit_selection_method,
-        f"agg{aggregation_method}",
-        f"abs{abs_score}",
-        f"metric{metric}",
-        f"graphtype{graph_type}",
+        f"agg_{aggregation_method}",
+        f"abs_{abs_score}",
+        f"metric_{metric}",
+        f"graph_type_{graph_type}",
     ]
     base = "_".join(parts)
     if exp_prefix:

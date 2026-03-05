@@ -115,44 +115,44 @@ def main(
         w = csv.writer(f)
         if write_header:
             if graph_type == "edges":
-                w.writerow(["circuit_selection_method", "source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_edges", "real_n_edges", "real_pct_edges", "faithfulness_by_mean"])
+                w.writerow(["source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_edges", "real_n_edges", "real_pct_edges", "faithfulness_by_mean"])
             else:
-                w.writerow(["circuit_selection_method", "source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_nodes", "real_n_nodes", "real_pct_nodes", "faithfulness_by_mean"])
+                w.writerow(["source_task_name", "source_circuit_id", "target_task_name", "target_circuit_id", "n_nodes", "real_n_nodes", "real_pct_nodes", "faithfulness_by_mean"])
         for _, row in df.iterrows():
             n = row[n_col]
             real_n = row[real_col]
             real_pct = row[pct_col]
             faithfulness = row["faithfulness_by_mean"]
-            w.writerow([circuit_selection_method, source_task_name, source_circuit_id, target_task_name, target_circuit_id, n, real_n, real_pct, faithfulness])
+            w.writerow([source_task_name, source_circuit_id, target_task_name, target_circuit_id, n, real_n, real_pct, faithfulness])
 
     logging.info(f"Cross-task results appended to {save_results_csv}")
 
 
 def _parse_args():
     parser = argparse.ArgumentParser(description="Cross-task faithfulness evaluation.")
-    parser.add_argument("--source_task_name", type=str, required=True)
-    parser.add_argument("--source_circuit_id", type=str, required=True)
-    parser.add_argument("--source_circuit_json", type=str, required=True)
-    parser.add_argument("--target_task_name", type=str, required=True)
-    parser.add_argument("--target_circuit_id", type=str, required=True)
-    parser.add_argument("--target_csv_path", type=str, required=True)
-    parser.add_argument("--save_results_csv", type=str, required=True)
-    parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--total_n_samples", type=int, required=True)
-    parser.add_argument("--model_type", type=str, required=True, choices=["esm3", "esm-c"])
-    parser.add_argument("--graph_type", type=str, default="nodes", choices=["edges", "nodes"])
-    parser.add_argument("--attribution_patching_method", type=str, default="EAP", choices=["EAP", "EAP-IG"])
-    parser.add_argument("--circuit_selection_method", type=str, default="greedy_abs")
-    parser.add_argument("--n_components_in_circuit_list", type=float, nargs="+", default=[0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0])
-    parser.add_argument("--metric", type=str, default="logit_diff", choices=["logit_diff", "log_prob"])
-    parser.add_argument("--abs_score", action="store_true")
-    parser.add_argument("--aggregation_method", type=str, default="sum", choices=["sum", "pos_mean"])
-    parser.add_argument("--EAP_IG_steps", type=int, default=5)
-    parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--random_state", type=int, default=42)
-    parser.add_argument("--train_ratio", type=float, default=0.5)
-    parser.add_argument("--exp_prefix", type=str, default="")
-    parser.add_argument("--delete_per_experiment_csv", action="store_true")
+    parser.add_argument("--source_task_name", type=str, required=True, help="Task name of the source circuit")
+    parser.add_argument("--source_circuit_id", type=str, required=True, help="UUID of the source circuit")
+    parser.add_argument("--source_circuit_json", type=str, required=True, help="Path to source circuit JSON (edges or nodes)")
+    parser.add_argument("--target_task_name", type=str, required=True, help="Task name of the target evaluation")
+    parser.add_argument("--target_circuit_id", type=str, required=True, help="UUID for the target run (for logging)")
+    parser.add_argument("--target_csv_path", type=str, required=True, help="CSV path to target dataset")
+    parser.add_argument("--save_results_csv", type=str, required=True, help="Path to append cross-task results")
+    parser.add_argument("--output_dir", type=str, required=True, help="Output directory for per-experiment files")
+    parser.add_argument("--total_n_samples", type=int, required=True, help="Number of samples from target dataset")
+    parser.add_argument("--model_type", type=str, required=True, choices=["esm3", "esm-c"], help="Model type")
+    parser.add_argument("--graph_type", type=str, default="nodes", choices=["edges", "nodes"], help="Graph type (edges or nodes)")
+    parser.add_argument("--attribution_patching_method", type=str, default="EAP", choices=["EAP", "EAP-IG"], help="Attribution method")
+    parser.add_argument("--circuit_selection_method", type=str, default="greedy_abs", help="Circuit selection (e.g. greedy_abs, top_n_abs)")
+    parser.add_argument("--n_components_in_circuit_list", type=float, nargs="+", default=[0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0], help="Fractions/numbers of components to evaluate")
+    parser.add_argument("--metric", type=str, default="logit_diff", choices=["logit_diff", "log_prob"], help="Evaluation metric")
+    parser.add_argument("--abs_score", action="store_true", help="Use absolute scores in attribution")
+    parser.add_argument("--aggregation_method", type=str, default="sum", choices=["sum", "pos_mean"], help="How to aggregate attribution scores")
+    parser.add_argument("--EAP_IG_steps", type=int, default=5, help="Steps for EAP-IG integration")
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
+    parser.add_argument("--random_state", type=int, default=42, help="Random seed")
+    parser.add_argument("--train_ratio", type=float, default=0.5, help="Train/test split ratio (unused; kept for API compatibility)")
+    parser.add_argument("--exp_prefix", type=str, default="", help="Prefix for experiment names")
+    parser.add_argument("--delete_per_experiment_csv", action="store_true", help="Delete per-experiment CSVs after appending to cross-task results")
     return parser.parse_args()
 
 

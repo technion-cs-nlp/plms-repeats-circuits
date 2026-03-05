@@ -157,6 +157,33 @@ def main(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
+    for k, v in (
+        ("csv_path", csv_path),
+        ("output_dir", str(output_dir)),
+        ("total_n_samples", total_n_samples),
+        ("model_type", model_type),
+        ("nodes_graph_json", nodes_graph_json),
+        ("n_nodes", n_nodes),
+        ("attribution_patching_method", attribution_patching_method),
+        ("circuit_selection_method", circuit_selection_method),
+        ("n_neurons_in_circuit_list", n_neurons_in_circuit_list),
+        ("min_performance_threshold_neurons", min_performance_threshold_neurons),
+        ("max_performance_threshold_neurons", max_performance_threshold_neurons),
+        ("is_per_layer_neurons", is_per_layer_neurons),
+        ("metric", metric),
+        ("abs_score", abs_score),
+        ("aggregation_method", aggregation_method),
+        ("EAP_IG_steps", EAP_IG_steps),
+        ("batch_size", batch_size),
+        ("random_state", random_state),
+        ("train_ratio", train_ratio),
+        ("exp_prefix", exp_prefix),
+        ("enable_min_circuit_search", enable_min_circuit_search),
+        ("min_circuit_size", min_circuit_size),
+        ("max_circuit_size", max_circuit_size),
+        ("max_search_steps", max_search_steps),
+    ):
+        logging.info("%s=%s", k, v)
     logging.info("Starting run_attribution_patching_neurons (ready nodes)")
 
     device = get_device()
