@@ -72,7 +72,15 @@ def main(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    logging.info("Running cross-task faithfulness: source->target")
+    log_file = output_dir / "cross_task.log"
+    log = logging.getLogger("run_cross_task")
+    if not log.handlers:
+        handler = logging.FileHandler(log_file)
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        log.addHandler(handler)
+    log.setLevel(logging.INFO)
+
+    log.info("Running cross-task faithfulness: source->target")
     df = run_nodes_edges_main(
         csv_path=target_csv_path,
         output_dir=str(output_dir),
@@ -97,7 +105,7 @@ def main(
     )
 
     if df is None or len(df) == 0:
-        logging.warning("No results from nodes_edges run.")
+        log.warning("No results from nodes_edges run.")
         return
 
     # Map DataFrame columns to (n, real_n, pct, real_pct, faithfulness_by_mean)
@@ -125,7 +133,7 @@ def main(
             faithfulness = row["faithfulness_by_mean"]
             w.writerow([source_task_name, source_circuit_id, target_task_name, target_circuit_id, n, real_n, real_pct, faithfulness])
 
-    logging.info(f"Cross-task results appended to {save_results_csv}")
+    log.info(f"Cross-task results appended to {save_results_csv}")
 
 
 def _parse_args():

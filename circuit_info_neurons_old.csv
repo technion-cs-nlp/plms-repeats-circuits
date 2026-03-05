@@ -1,3 +1,0 @@
-circuit_id,task_name,post_attribution_patching_processing,n_nodes_as_first_step_for_neurons,n_neurons,is_per_layer,pct_n_neurons_per_layer,tot_n_neurons,tot_pct_n_neurons,circuit_size,circuit_size_pct,num_mlp_nodes,faithfulness_by_mean
-b7ef3e16-87ca-4ef4-be29-a946c5c06fbb,try_code,top_n_abs,575,55296,False,,55296,0.5,55835,0.5019237338415347,36,0.8038181662559509
-5ef68d0c-340f-4378-8ff3-f0348c092d26,try_code,top_n_abs,311,122879,False,,122879,0.6249949137369791,123144,0.6226878773475187,46,0.8046160340309143
