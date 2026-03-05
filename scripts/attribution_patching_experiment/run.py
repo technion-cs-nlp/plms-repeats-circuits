@@ -1,8 +1,3 @@
-"""Run attribution patching circuit discovery pipeline.
-
-Modeled on scripts/counterfactual_experiment/run.py. Supports a discover step
-that runs attribution patching for edges, nodes, or neurons.
-"""
 import argparse
 import csv
 import sys

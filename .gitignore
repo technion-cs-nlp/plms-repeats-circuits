@@ -45,3 +45,4 @@ scripts/attribution_patching_experiment/run_cross_task_old_new.py
 results_cross_task_new/
 results_cross_task_old/
 scripts/attribution_patching_experiment/verification/
+scripts/attribution_patching_experiment/run_discover_sbatch.sh
