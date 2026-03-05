@@ -1,0 +1,2 @@
+circuit_id,circuit_selection_method,n_nodes,pct_n_nodes,real_n_nodes,real_pct_n_nodes,faithfulness_by_mean
+6049ddfe-143a-4015-aaaf-5003d82cfae9,top_n_abs,575,0.8381924198250729,575,0.8381924198250729,0.8417784571647644

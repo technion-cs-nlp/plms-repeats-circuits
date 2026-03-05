@@ -69,16 +69,25 @@ def select_circuit_nodes(
     _log_info(log, "Entering select_circuit_nodes")
     _log_info(log, f"Selection method: {selection_method}, n_nodes: {n_nodes}")
 
-    if n_nodes >= graph.count_total_nodes():
+    n_total = len(graph.nodes) if isinstance(graph, NeuronGraph) else graph.count_total_nodes()
+    if n_nodes >= n_total:
         _log_info(log, "All nodes assigned to the graph.")
         graph.set_all_nodes_in_graph(in_graph=True)
-    elif selection_method == "top_n":
-        graph.apply_topn(n=n_nodes, absolute=False)
+        _log_info(log, "Exiting select_circuit_nodes")
+        return
+
+    if selection_method == "top_n":
+        absolute = False
     elif selection_method == "top_n_abs":
-        graph.apply_topn(n=n_nodes, absolute=True)
+        absolute = True
     else:
         _log_error(log, f"Unsupported selection method: {selection_method}")
         raise RuntimeError(f"Unsupported selection method: {selection_method}")
+
+    if isinstance(graph, NeuronGraph):
+        graph.apply_topn_on_nodes(n=n_nodes, absolute=absolute)
+    else:
+        graph.apply_topn(n=n_nodes, absolute=absolute)
 
     _log_info(log, "Exiting select_circuit_nodes")
 

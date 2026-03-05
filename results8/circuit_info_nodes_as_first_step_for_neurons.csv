@@ -1,0 +1,2 @@
+circuit_id,task_name,post_attribution_patching_processing,n_nodes,pct_n_nodes,real_n_nodes,real_pct_n_nodes,faithfulness_by_mean
+ed1f2762-e963-45eb-9681-32be109a4f83,try_code,top_n_abs,575,0.8381924198250729,575,0.8381924198250729,0.8417784571647644

@@ -76,6 +76,10 @@ def _build_neurons_graph_with_attribution(
         if node.score is not None and ng_node.score is not None:
             if not np.allclose(float(node.score), float(ng_node.score), rtol=1e-5, atol=1e-8):
                 raise ValueError(f"Node score mismatch for {name}: nodes_graph={node.score}, neurons_graph={ng_node.score}")
+    # Save graph BEFORE select_circuit_nodes (original state with all attribution scores)
+    neurons_graph_path = output_dir / f"{experiment_name}.json"
+    neurons_graph.to_json(neurons_graph_path)
+    logging.info(f"Neurons graph saved to {neurons_graph_path}")
     select_circuit_nodes(
         graph=neurons_graph,
         selection_method=circuit_selection_method,
@@ -84,9 +88,6 @@ def _build_neurons_graph_with_attribution(
     )
     n_attn = neurons_graph.count_attention_nodes(filter_by_in_graph=True)
     n_mlp = neurons_graph.count_mlp_nodes(filter_by_in_graph=True)
-    neurons_graph_path = output_dir / f"{experiment_name}.json"
-    neurons_graph.to_json(neurons_graph_path)
-    logging.info(f"Neurons graph saved to {neurons_graph_path}")
     return neurons_graph, n_attn, n_mlp
 
 

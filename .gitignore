@@ -13,7 +13,7 @@ __pycache__/
 
 # Log files
 *.log
-
+.cursor/
 # Experiment results (generated, not committed)
 results/
 
