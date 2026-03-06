@@ -291,21 +291,19 @@ def run_compare_iou_recall(
     methods: list[str],
     metric: str = "iou",
     compare_modes: list[str] | None = None,
+    all_circuits: list[CircuitInfo] | None = None,
 ) -> None:
-    """Run IOU/recall comparison for across_counterfactual and across_repeats modes."""
-    if graph_type not in ("edges", "nodes"):
-        raise ValueError(f"compare_iou_recall requires graph_type edges or nodes, got {graph_type}")
-    if compare_modes is None:
-        compare_modes = ["across_counterfactual", "across_repeats"]
-
-    all_circuits = _enumerate_circuits_for_compare(
-        results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
-    )
+    """Run IOU/recall comparison for across_counterfactual and across_repeats modes. Requires graph_type in (edges, nodes). compare_modes must be a list (not None)."""
+    if all_circuits is None:
+        all_circuits = _enumerate_circuits_for_compare(
+            results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
+        )
     if not all_circuits:
         print("No circuits found for compare_iou_recall. Run discover first.", flush=True)
         return
 
     def _run_pair(c1: CircuitInfo, c2: CircuitInfo, out_csv: Path) -> None:
+        assert c1.seed == c2.seed, "Compare only within same seed"
         run_iou_recall_main(
             circuit_json_1=str(c1.json_path),
             circuit_json_2=str(c2.json_path),
@@ -333,7 +331,9 @@ def run_compare_iou_recall(
                     out_dir.mkdir(parents=True, exist_ok=True)
                     out_csv = out_dir / f"{metric}_results.csv"
                     for i, c1 in enumerate(group):
-                        for j, c2 in enumerate(group):
+                        j_start = 0  # Compute all pairs for both IOU and recall
+                        for j in range(j_start, len(group)):
+                            c2 = group[j]
                             _run_pair(c1, c2, out_csv)
 
     if "across_repeats" in compare_modes:
@@ -347,7 +347,9 @@ def run_compare_iou_recall(
                     out_dir.mkdir(parents=True, exist_ok=True)
                     out_csv = out_dir / f"{metric}_results.csv"
                     for i, c1 in enumerate(group):
-                        for j, c2 in enumerate(group):
+                        j_start = 0  # Compute all pairs for both IOU and recall
+                        for j in range(j_start, len(group)):
+                            c2 = group[j]
                             _run_pair(c1, c2, out_csv)
 
 
@@ -361,16 +363,13 @@ def run_compare_cross_task(
     methods: list[str],
     n_examples: int = 1000,
     compare_modes: list[str] | None = None,
+    all_circuits: list[CircuitInfo] | None = None,
 ) -> None:
-    """Run cross-task faithfulness comparison for across_counterfactual and across_repeats modes."""
-    if graph_type not in ("edges", "nodes"):
-        raise ValueError(f"compare_cross_task requires graph_type edges or nodes, got {graph_type}")
-    if compare_modes is None:
-        compare_modes = ["across_counterfactual", "across_repeats"]
-
-    all_circuits = _enumerate_circuits_for_compare(
-        results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
-    )
+    """Run cross-task faithfulness comparison for across_counterfactual and across_repeats modes. Requires graph_type in (edges, nodes). compare_modes must be a list (not None)."""
+    if all_circuits is None:
+        all_circuits = _enumerate_circuits_for_compare(
+            results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
+        )
     if not all_circuits:
         print("No circuits found for compare_cross_task. Run discover first.", flush=True)
         return
@@ -378,6 +377,7 @@ def run_compare_cross_task(
     circuit_dir_fn = _circuit_discovery_dir
 
     def _run_pair(c1: CircuitInfo, c2: CircuitInfo, out_csv: Path) -> None:
+        assert c1.seed == c2.seed, "Compare only within same seed"
         csv_dir = circuit_dir_fn(datasets_root, c2.repeat_type, c2.model_type)
         target_path = find_file_for_method(c2.method, csv_dir, kind="main", ext="csv")
         if target_path is None:
@@ -415,6 +415,8 @@ def run_compare_cross_task(
                     out_csv = out_dir / "cross_task_results.csv"
                     for i, c1 in enumerate(group):
                         for c2 in group:
+                            if c1.circuit_id == c2.circuit_id:
+                                continue
                             _run_pair(c1, c2, out_csv)
 
     if "across_repeats" in compare_modes:
@@ -429,7 +431,61 @@ def run_compare_cross_task(
                     out_csv = out_dir / "cross_task_results.csv"
                     for i, c1 in enumerate(group):
                         for c2 in group:
+                            if c1.circuit_id == c2.circuit_id:
+                                continue
                             _run_pair(c1, c2, out_csv)
+
+
+def run_compare(
+    datasets_root: Path,
+    results_root: Path,
+    repeat_types: list[str],
+    model_types: list[str],
+    seeds: list[int],
+    graph_type: str,
+    methods: list[str],
+    compare_metrics: list[str],
+    compare_modes: list[str] | None = None,
+    n_examples: int = 1000,
+) -> None:
+    """Run compare step: IOU/recall and/or cross_task based on compare_metrics. compare_modes must be a non-empty list (validated in main)."""
+    all_circuits = _enumerate_circuits_for_compare(
+        results_root, datasets_root, repeat_types, model_types, seeds, methods, graph_type
+    )
+    if not all_circuits:
+        print("No circuits found for compare. Run discover first.", flush=True)
+        return
+
+    iou_recall_metrics = [m for m in compare_metrics if m in ("iou", "recall")]
+    for metric in iou_recall_metrics:
+        print(f"  compare metric: {metric}", flush=True)
+        run_compare_iou_recall(
+            datasets_root=datasets_root,
+            results_root=results_root,
+            repeat_types=repeat_types,
+            model_types=model_types,
+            seeds=seeds,
+            graph_type=graph_type,
+            methods=methods,
+            metric=metric,
+            compare_modes=compare_modes,
+            all_circuits=all_circuits,
+        )
+
+    if "cross_task" in compare_metrics:
+        print("  compare metric: cross_task", flush=True)
+        run_compare_cross_task(
+            datasets_root=datasets_root,
+            results_root=results_root,
+            repeat_types=repeat_types,
+            model_types=model_types,
+            seeds=seeds,
+            graph_type=graph_type,
+            methods=methods,
+            n_examples=n_examples,
+            compare_modes=compare_modes,
+            all_circuits=all_circuits,
+        )
 
 
 def run_discover(
@@ -558,7 +614,7 @@ def main():
         "--steps",
         nargs="+",
         default=["discover"],
-        choices=["discover", "compare_cross_task", "compare_iou_recall"],
+        choices=["discover", "compare"],
         help="Steps to run",
     )
     parser.add_argument(
@@ -608,11 +664,11 @@ def main():
         help="Modes for compare steps (default: across_counterfactual across_repeats)",
     )
     parser.add_argument(
-        "--compare_metric",
-        type=str,
-        default="iou",
-        choices=["iou", "recall"],
-        help="Metric for compare_iou_recall (default: iou)",
+        "--compare_metrics",
+        nargs="+",
+        default=["iou", "cross_task"],
+        choices=["iou", "recall", "cross_task"],
+        help="Compare metrics to run: iou, recall, cross_task (default: iou cross_task)",
     )
     args = parser.parse_args()
 
@@ -639,13 +695,14 @@ def main():
         )
         print("=== Step: discover done ===\n", flush=True)
 
-    if "compare_iou_recall" in args.steps:
+    if "compare" in args.steps:
         if args.graph_type not in ("edges", "nodes"):
             raise ValueError(
-                "compare_iou_recall requires graph_type edges or nodes; neurons graph type is not supported"
+                "compare requires graph_type edges or nodes; neurons graph type is not supported"
             )
-        print("\n=== Step: compare_iou_recall ===", flush=True)
-        run_compare_iou_recall(
+        compare_modes = args.compare_modes or ["across_counterfactual", "across_repeats"]
+        print("\n=== Step: compare ===", flush=True)
+        run_compare(
             datasets_root=datasets_root,
             results_root=results_root,
             repeat_types=args.repeat_types,
@@ -653,29 +710,11 @@ def main():
             seeds=args.seeds,
             graph_type=args.graph_type,
             methods=args.methods,
-            metric=args.compare_metric,
-            compare_modes=args.compare_modes,
-        )
-        print("=== Step: compare_iou_recall done ===\n", flush=True)
-
-    if "compare_cross_task" in args.steps:
-        if args.graph_type not in ("edges", "nodes"):
-            raise ValueError(
-                "compare_cross_task requires graph_type edges or nodes; neurons graph type is not supported"
-            )
-        print("\n=== Step: compare_cross_task ===", flush=True)
-        run_compare_cross_task(
-            datasets_root=datasets_root,
-            results_root=results_root,
-            repeat_types=args.repeat_types,
-            model_types=args.model_types,
-            seeds=args.seeds,
-            graph_type=args.graph_type,
-            methods=args.methods,
+            compare_metrics=args.compare_metrics,
+            compare_modes=compare_modes,
             n_examples=args.n_examples,
-            compare_modes=args.compare_modes,
         )
-        print("=== Step: compare_cross_task done ===\n", flush=True)
+        print("=== Step: compare done ===\n", flush=True)
 
     print("Done.", flush=True)
 
