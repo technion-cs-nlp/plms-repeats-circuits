@@ -14,7 +14,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from plms_repeats_circuits.EAP.graph import Graph
 from plms_repeats_circuits.EAP import circuit_selection
-from utils import get_edges_or_nodes_number
+from attribution_patching_utils import get_edges_or_nodes_number
 
 
 def compute_iou(g1: Graph, g2: Graph, mode: str) -> float:

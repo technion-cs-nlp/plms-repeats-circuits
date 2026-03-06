@@ -35,6 +35,9 @@ from run_attribution_patching_nodes_edges import main as run_nodes_edges_main
 from run_attribution_patching_neurons import main as run_neurons_main
 from run_iou_recall import main as run_iou_recall_main
 from run_cross_task import main as run_cross_task_main
+from analyze_utils import load_plotting_config
+from analyze_faithfulness import run_faithfulness_nodes_edges, run_faithfulness_neurons
+from analyze_compare import run_compare_heatmaps, run_combined_heatmaps
 
 # Discover step params (aligned with smart_attribution_launcher.py)
 DISCOVER_ATTRIBUTION_METHOD = "EAP-IG"
@@ -614,7 +617,7 @@ def main():
         "--steps",
         nargs="+",
         default=["discover"],
-        choices=["discover", "compare"],
+        choices=["discover", "compare", "analyze"],
         help="Steps to run",
     )
     parser.add_argument(
@@ -627,7 +630,7 @@ def main():
         "--seeds",
         nargs="+",
         type=int,
-        default=[42],
+        default=[42,43,44,45,46],
         help="Random seeds (e.g. 42 43 44 45 46)",
     )
     parser.add_argument(
@@ -647,7 +650,7 @@ def main():
     parser.add_argument(
         "--methods",
         nargs="+",
-        required=True,
+        default=["blosum", "mask", "blosum-opposite50", "permutation"],
         help="Counterfactual methods (validated against datasets)",
     )
     parser.add_argument(
@@ -666,9 +669,16 @@ def main():
     parser.add_argument(
         "--compare_metrics",
         nargs="+",
-        default=["iou", "cross_task"],
+        default=["iou", "cross_task", "recall"],
         choices=["iou", "recall", "cross_task"],
         help="Compare metrics to run: iou, recall, cross_task (default: iou cross_task)",
+    )
+    parser.add_argument(
+        "--analyze_types",
+        nargs="+",
+        default=["all"],
+        choices=["all", "faithfulness", "compare_heatmaps"],
+        help="What to generate in analyze step (default: all)",
     )
     args = parser.parse_args()
 
@@ -715,6 +725,64 @@ def main():
             n_examples=args.n_examples,
         )
         print("=== Step: compare done ===\n", flush=True)
+
+    if "analyze" in args.steps:
+        plot_config = load_plotting_config(None, fallback_dir=SCRIPT_DIR)
+
+        compare_modes = args.compare_modes
+        compare_metrics = args.compare_metrics
+
+        if "all" in args.analyze_types or "faithfulness" in args.analyze_types:
+            if args.graph_type in ("edges", "nodes"):
+                run_faithfulness_nodes_edges(
+                    results_root,
+                    results_root / "faithfulness",
+                    args.repeat_types,
+                    args.model_types,
+                    args.methods,
+                    args.seeds,
+                    args.graph_type,
+                    plot_config,
+                )
+            if args.graph_type == "neurons":
+                run_faithfulness_neurons(
+                    results_root,
+                    results_root / "faithfulness",
+                    args.repeat_types,
+                    args.model_types,
+                    args.methods,
+                    args.seeds,
+                    plot_config,
+                )
+
+        if "all" in args.analyze_types or "compare_heatmaps" in args.analyze_types:
+            if args.graph_type in ("edges", "nodes"):
+                run_compare_heatmaps(
+                    results_root,
+                    results_root / "circuit_discovery_compare",
+                    args.repeat_types,
+                    args.model_types,
+                    args.methods,
+                    args.seeds,
+                    args.graph_type,
+                    compare_modes,
+                    compare_metrics,
+                    plot_config,
+                )
+                if set(compare_metrics) >= {"cross_task", "iou", "recall"}:
+                    run_combined_heatmaps(
+                        results_root,
+                        results_root / "circuit_discovery_compare",
+                        args.repeat_types,
+                        args.model_types,
+                        args.methods,
+                        args.seeds,
+                        args.graph_type,
+                        compare_modes,
+                        plot_config,
+                    )
+
+        print("=== Step: analyze done ===\n", flush=True)
 
     print("Done.", flush=True)
 

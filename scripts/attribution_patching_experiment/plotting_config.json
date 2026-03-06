@@ -1,0 +1,51 @@
+{
+  "default": {
+    "grey_area_lower": 0.84,
+    "grey_area_upper": 0.85,
+    "plot_with_circuit_sizes": true,
+    "nodes": {
+      "use_log_scale": false,
+      "font_size": 12,
+      "legend_font_size": 10,
+      "fig_width_across_repeats": 350,
+      "fig_width_across_counterfactual": 500,
+      "axis_label": "Components",
+      "convert_to_pct": true,
+      "max_pct_across_repeats": null,
+      "max_pct_across_counterfactual": null
+    },
+    "edges": {
+      "use_log_scale": true,
+      "font_size": 14,
+      "legend_font_size": 14,
+      "fig_width_across_repeats": 500,
+      "fig_width_across_counterfactual": 500,
+      "axis_label": "Edges",
+      "convert_to_pct": false,
+      "max_pct_across_repeats": null,
+      "max_pct_across_counterfactual": null
+    },
+    "neurons": {
+      "use_log_scale": true
+    }
+  },
+  "esm3": {
+    "nodes": {
+      "max_nodes": 1202,
+      "max_pct_across_repeats": 0.5
+    },
+    "neurons": {
+      "is_per_layer": true,
+      "vline": 0.0276
+    }
+  },
+  "esm-c": {
+    "nodes": {
+      "max_nodes": 686
+    },
+    "neurons": {
+      "is_per_layer": true,
+      "vline": 0.07
+    }
+  }
+}

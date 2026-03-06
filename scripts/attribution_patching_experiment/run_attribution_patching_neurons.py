@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from utils import (
+from attribution_patching_utils import (
     SearchMinCircuitAboveThreshold,
     build_experiment_name,
     circuit_info_csv_path,
