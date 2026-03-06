@@ -69,12 +69,33 @@ def get_plot_config_for_model(config: Dict[str, Any], model_type: str) -> Dict[s
     return out
 
 
-def get_graph_type_config(config: Dict[str, Any], model_type: str, graph_type: str) -> Dict[str, Any]:
-    """Merge flat model config with graph-type-specific sub-config (default then model override)."""
-    cfg = get_plot_config_for_model(config, model_type)
-    cfg.update(config.get("default", {}).get(graph_type, {}))
-    cfg.update(config.get(model_type, {}).get(graph_type, {}))
+def get_graph_type_config(
+    config: Dict[str, Any],
+    model_type: str,
+    graph_type: str,
+    section: str = "faithfulness",
+) -> Dict[str, Any]:
+    """Merge flat section config with graph-type-specific sub-config (default then model override).
+
+    Config is organised as::
+
+        {"default": {"faithfulness": {"nodes": {...}, "edges": {...}}, "heatmaps": {...}},
+         "esm3":    {"faithfulness": {"nodes": {...}}}}
+
+    ``section`` selects which top-level sub-dict to read from (e.g. ``"faithfulness"``).
+    """
+    section_default = config.get("default", {}).get(section, {})
+    section_model = config.get(model_type, {}).get(section, {})
+    cfg = {k: v for k, v in section_default.items() if not isinstance(v, dict)}
+    cfg.update({k: v for k, v in section_model.items() if not isinstance(v, dict)})
+    cfg.update(section_default.get(graph_type, {}))
+    cfg.update(section_model.get(graph_type, {}))
     return cfg
+
+
+def get_heatmap_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return heatmap plotting config from the default 'heatmaps' section."""
+    return dict(config.get("default", {}).get("heatmaps", {}))
 
 
 def extract_repeat_type(task_name: str) -> Optional[str]:
@@ -87,6 +108,22 @@ def extract_method(task_name: str) -> Optional[str]:
     """Extract method from task name, e.g. approximate_blosum_42 -> blosum."""
     m = re.match(r"^[^_]+_([^_]+(?:_[^_]+)?)_\d+$", str(task_name))
     return m.group(1) if m else None
+
+
+def extract_seed(task_name: str) -> Optional[int]:
+    """Extract seed from task name, e.g. approximate_blosum_42 -> 42."""
+    m = re.search(r"_(\d+)$", str(task_name))
+    return int(m.group(1)) if m else None
+
+
+def method_to_display_label(method: str, config: Dict[str, Any] | None = None) -> str:
+    """Get display label for a method name (e.g. blosum -> '100% BLOSUM')."""
+    return task_name_to_display_label(f"approximate_{method}_0", "replacement", config) or str(method)
+
+
+def repeat_type_to_display_label(repeat_type: str, config: Dict[str, Any] | None = None) -> str:
+    """Get display label for a repeat type (e.g. approximate -> 'Approximate')."""
+    return task_name_to_display_label(f"{repeat_type}_blosum_0", "only_repeat_group", config) or str(repeat_type)
 
 
 def load_original_faithfulness(
@@ -136,14 +173,19 @@ def _get_repeat_type_labels(config: Dict[str, Any] | None) -> Dict[str, str]:
     return get_repeat_type_labels(config)
 
 
+# Default axis order: Synthetic (top/left) -> Identical -> Approximate (bottom/right)
+DEFAULT_REPEAT_TYPE_ORDER = ["Synthetic", "Identical", "Approximate"]
+
+
 def sort_task_names_for_display(
     tasks_names: List[str],
     config: Dict[str, Any] | None = None,
 ) -> List[str]:
     """Return labels sorted for heatmap axis ordering. Uses display_order from config.
-    display_order.method can use method names (e.g. mask, blosum) which are mapped to display names."""
+    display_order.method can use method names (e.g. mask, blosum) which are mapped to display names.
+    Repeat types default to Synthetic -> Identical -> Approximate (top to bottom, left to right)."""
     order = (config or {}).get("display_order", {})
-    repeat_order = order.get("repeat_type", [])
+    repeat_order = order.get("repeat_type") or DEFAULT_REPEAT_TYPE_ORDER
     raw_method_order = order.get("method") or [m["name"] for m in COUNTERFACTUAL_METHODS]
     method_order = [METHOD_DISPLAY_NAMES.get(x, x) for x in raw_method_order]
     full_order = list(repeat_order) + [x for x in method_order if x not in repeat_order]

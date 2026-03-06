@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -13,14 +12,19 @@ from plotly.subplots import make_subplots
 
 from analyze_utils import (
     FONT_SIZE,
-    REPEAT_TYPE_PATHS,
+    get_heatmap_config,
     load_original_faithfulness,
     extract_repeat_type,
     extract_method,
+    extract_seed,
+    method_to_display_label,
+    repeat_type_to_display_label,
     plot_heatmap_plotly,
     sort_task_names_for_display,
-    task_name_to_display_label,
 )
+
+# ─── output-path label ────────────────────────────────────────────────────────
+_OUTPUT_FOLDER = "heatmaps"
 
 
 def run_compare_heatmaps(
@@ -36,7 +40,9 @@ def run_compare_heatmaps(
     plot_config: dict[str, Any] | None = None,
 ) -> None:
     """Plot cross_task, iou, recall heatmaps per mode."""
-    plot_with_circuit_sizes = (plot_config or {}).get("default", {}).get("plot_with_circuit_sizes", False)
+    heatmap_cfg = get_heatmap_config(plot_config or {})
+    plot_with_circuit_sizes = heatmap_cfg.get("plot_with_circuit_sizes", False)
+    print(f"plot_with_circuit_sizes: {plot_with_circuit_sizes}")
     for mode in compare_modes:
         for mt in model_types:
             if mode == "across_counterfactual":
@@ -80,7 +86,7 @@ def _run_compare_across_counterfactual(
     plot_config: dict | None,
 ) -> None:
     for rt in repeat_types:
-        cross_path = (
+        cross_paths = [
             results_root
             / "circuit_discovery_compare"
             / "cross_task"
@@ -88,18 +94,21 @@ def _run_compare_across_counterfactual(
             / rt
             / model_type
             / graph_type
-            / f"seed_{seeds[0]}"
+            / f"seed_{seed}"
             / "cross_task_results.csv"
-        )
-        if "cross_task" in compare_metrics and cross_path.exists():
+            for seed in seeds
+        ]
+        cross_exist = [p for p in cross_paths if p.exists()]
+        if "cross_task" in compare_metrics and cross_exist:
             _plot_cross_task_heatmap(
-                cross_path,
+                cross_exist,
                 results_root,
-                output_dir / "compare" / "across_counterfactual" / "cross_task" / rt / model_type / graph_type,
+                output_dir / _OUTPUT_FOLDER / "across_counterfactual" / "cross_task" / rt / model_type / graph_type,
                 rt,
                 model_type,
                 graph_type,
                 seeds,
+                None,
                 "across_counterfactual",
                 plot_with_circuit_sizes,
                 is_counterfactual=True,
@@ -108,7 +117,7 @@ def _run_compare_across_counterfactual(
         for metric in ("iou", "recall"):
             if metric not in compare_metrics:
                 continue
-            iou_path = (
+            iou_paths = [
                 results_root
                 / "circuit_discovery_compare"
                 / "iou_recall"
@@ -116,18 +125,21 @@ def _run_compare_across_counterfactual(
                 / rt
                 / model_type
                 / graph_type
-                / f"seed_{seeds[0]}"
+                / f"seed_{seed}"
                 / f"{metric}_results.csv"
-            )
-            if iou_path.exists():
+                for seed in seeds
+            ]
+            iou_exist = [p for p in iou_paths if p.exists()]
+            if iou_exist:
                 _plot_iou_recall_heatmap(
-                    iou_path,
-                    output_dir / "compare" / "across_counterfactual" / f"{metric}" / rt / model_type / graph_type,
+                    iou_exist,
+                    output_dir / _OUTPUT_FOLDER / "across_counterfactual" / metric / rt / model_type / graph_type,
                     rt,
                     model_type,
                     graph_type,
                     metric,
                     plot_with_circuit_sizes,
+                    is_counterfactual=True,
                     plot_config=plot_config,
                 )
 
@@ -145,26 +157,29 @@ def _run_compare_across_repeats(
     plot_config: dict | None,
 ) -> None:
     for method in methods:
-        cross_path = (
+        cross_paths = [
             results_root
             / "circuit_discovery_compare"
             / "cross_task"
             / "across_repeats"
             / model_type
             / graph_type
-            / f"seed_{seeds[0]}"
+            / f"seed_{seed}"
             / method
             / "cross_task_results.csv"
-        )
-        if "cross_task" in compare_metrics and cross_path.exists():
+            for seed in seeds
+        ]
+        cross_exist = [p for p in cross_paths if p.exists()]
+        if "cross_task" in compare_metrics and cross_exist:
             _plot_cross_task_heatmap(
-                cross_path,
+                cross_exist,
                 results_root,
-                output_dir / "compare" / "across_repeats" / "cross_task" / model_type / graph_type / method,
+                output_dir / _OUTPUT_FOLDER / "across_repeats" / "cross_task" / model_type / graph_type / method,
                 None,
                 model_type,
                 graph_type,
                 seeds,
+                repeat_types,
                 "across_repeats",
                 plot_with_circuit_sizes,
                 is_counterfactual=False,
@@ -173,80 +188,92 @@ def _run_compare_across_repeats(
         for metric in ("iou", "recall"):
             if metric not in compare_metrics:
                 continue
-            iou_path = (
+            iou_paths = [
                 results_root
                 / "circuit_discovery_compare"
                 / "iou_recall"
                 / "across_repeats"
                 / model_type
                 / graph_type
-                / f"seed_{seeds[0]}"
+                / f"seed_{seed}"
                 / method
                 / f"{metric}_results.csv"
-            )
-            if iou_path.exists():
+                for seed in seeds
+            ]
+            iou_exist = [p for p in iou_paths if p.exists()]
+            if iou_exist:
                 _plot_iou_recall_heatmap(
-                    iou_path,
-                    output_dir / "compare" / "across_repeats" / f"{metric}" / model_type / graph_type / method,
+                    iou_exist,
+                    output_dir / _OUTPUT_FOLDER / "across_repeats" / metric / model_type / graph_type / method,
                     None,
                     model_type,
                     graph_type,
                     metric,
                     plot_with_circuit_sizes,
+                    is_counterfactual=False,
                     plot_config=plot_config,
                 )
 
 
-def _extract_seed(task_name: str) -> int:
-    m = re.search(r"_(\d+)$", str(task_name))
-    return int(m.group(1)) if m else 0
-
-
 def _plot_cross_task_heatmap(
-    csv_path: Path,
+    csv_paths: list[Path],
     results_root: Path,
     out_dir: Path,
     repeat_type: str | None,
     model_type: str,
     graph_type: str,
     seeds: list[int],
+    repeat_types: list[str] | None,
     mode: str,
     plot_with_circuit_sizes: bool,
     is_counterfactual: bool,
     plot_config: dict | None = None,
 ) -> None:
-    df = pd.read_csv(csv_path)
+    """Plot cross-task heatmap. csv_paths: one CSV per seed (aggregated across seeds)."""
+    dfs = []
+    for p in csv_paths:
+        if not p.exists():
+            continue
+        d = pd.read_csv(p)
+        d["seed"] = d["source_task_name"].apply(lambda x: extract_seed(x) or 0)
+        dfs.append(d)
+    if not dfs:
+        return
+    df = pd.concat(dfs, ignore_index=True)
+
     df["source_repeat"] = df["source_task_name"].apply(extract_repeat_type)
     df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
     df["source_method"] = df["source_task_name"].apply(extract_method)
     df["target_method"] = df["target_task_name"].apply(extract_method)
-    df["seed"] = df["source_task_name"].apply(_extract_seed)
 
     if is_counterfactual:
-        def method_to_label(m: str) -> str:
-            return task_name_to_display_label(f"approximate_{m}_0", "replacement", plot_config) or str(m)
-        df["source_label"] = df["source_method"].apply(method_to_label)
-        df["target_label"] = df["target_method"].apply(method_to_label)
+        df["source_label"] = df["source_method"].apply(lambda m: method_to_display_label(m, plot_config))
+        df["target_label"] = df["target_method"].apply(lambda m: method_to_display_label(m, plot_config))
     else:
-        df["source_label"] = df["source_repeat"].apply(
-            lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-        )
-        df["target_label"] = df["target_repeat"].apply(
-            lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-        )
+        df["source_label"] = df["source_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
+        df["target_label"] = df["target_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
 
-    original_faith = {}
+    # Load original faithfulness: for across_counterfactual one repeat_type; for across_repeats all
+    original_faith: dict[str, dict] = {}
     if is_counterfactual and repeat_type:
-        original_faith, _ = load_original_faithfulness(
+        of, _ = load_original_faithfulness(
             results_root, repeat_type, model_type, graph_type, seeds, ["blosum"]
         )
+        original_faith[repeat_type] = of
+    elif not is_counterfactual and repeat_types:
+        for rt in repeat_types:
+            of, _ = load_original_faithfulness(
+                results_root, rt, model_type, graph_type, seeds, ["blosum"]
+            )
+            original_faith[rt] = of
 
     norm_rows = []
     for _, row in df.iterrows():
         norm = row["faithfulness_by_mean"]
-        if is_counterfactual and repeat_type:
+        target_rt = row["target_repeat"]
+        if target_rt in original_faith:
             key = (row["target_circuit_id"], row["seed"])
-            orig = original_faith.get(key)
+            orig = original_faith[target_rt].get(key)
             if orig and orig > 0:
                 norm = row["faithfulness_by_mean"] / orig
         target_size = row.get("real_pct_nodes", row.get("real_n_nodes"))
@@ -256,6 +283,36 @@ def _plot_cross_task_heatmap(
             "faithfulness_by_mean": norm,
             "target_circuit_size": target_size,
         })
+
+    # Add diagonal entries (self->self = 1.0); cross_task CSVs omit same->same pairs
+    if not is_counterfactual and repeat_types:
+        circuit_ids_per_rt_seed: dict[tuple[str, int], str] = {}
+        for _, row in df.iterrows():
+            k = (row["target_repeat"], row["seed"])
+            if k not in circuit_ids_per_rt_seed:
+                circuit_ids_per_rt_seed[k] = row["target_circuit_id"]
+        for (rt, seed), _ in circuit_ids_per_rt_seed.items():
+            lbl = repeat_type_to_display_label(rt, plot_config)
+            norm_rows.append({
+                "source_label": lbl,
+                "target_label": lbl,
+                "faithfulness_by_mean": 1.0,
+                "target_circuit_size": None,
+            })
+    elif is_counterfactual and repeat_type:
+        seen_method_seed: set[tuple[str, int]] = set()
+        for _, row in df.iterrows():
+            k = (row["target_method"], row["seed"])
+            if k not in seen_method_seed:
+                seen_method_seed.add(k)
+                lbl = method_to_display_label(row["target_method"], plot_config)
+                norm_rows.append({
+                    "source_label": lbl,
+                    "target_label": lbl,
+                    "faithfulness_by_mean": 1.0,
+                    "target_circuit_size": None,
+                })
+
     res = pd.DataFrame(norm_rows)
     agg = res.groupby(["source_label", "target_label"]).agg(
         faithfulness_by_mean=("faithfulness_by_mean", "mean"),
@@ -269,13 +326,14 @@ def _plot_cross_task_heatmap(
     agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
     agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
 
+    print(f"  Cross-task {mode}: aggregated {len(csv_paths)} seeds, {len(res)} rows -> {len(agg)} cells")
     out_dir.mkdir(parents=True, exist_ok=True)
     plot_heatmap_plotly(
         agg,
         x_col="target_label",
         y_col="source_label",
-        x_label="Target Task",
-        y_label="Source Task",
+        x_label="Dataset",
+        y_label="Circuit",
         metric="faithfulness_by_mean",
         metric_label="Faithfulness",
         std_col="faithfulness_std",
@@ -289,27 +347,43 @@ def _plot_cross_task_heatmap(
 
 
 def _plot_iou_recall_heatmap(
-    csv_path: Path,
+    csv_paths: list[Path],
     out_dir: Path,
     repeat_type: str | None,
     model_type: str,
     graph_type: str,
     metric: str,
     plot_with_circuit_sizes: bool,
+    is_counterfactual: bool = False,
     plot_config: dict | None = None,
 ) -> None:
-    df = pd.read_csv(csv_path)
+    """Plot IoU or recall heatmap. csv_paths: one CSV per seed (aggregated across seeds).
+
+    When is_counterfactual: axes are methods (100% BLOSUM, 100% Mask, etc.).
+    Otherwise (across_repeats): axes are repeat types (Synthetic, Identical, Approximate).
+    """
+    dfs = []
+    for p in csv_paths:
+        if not p.exists():
+            continue
+        dfs.append(pd.read_csv(p))
+    if not dfs:
+        return
+    df = pd.concat(dfs, ignore_index=True)
+
     metric_col = f"{metric}_nodes" if graph_type == "nodes" else f"{metric}_edges"
     if metric_col not in df.columns:
         return
-    df["source_repeat"] = df["source_task_name"].apply(extract_repeat_type)
-    df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
-    df["source_label"] = df["source_repeat"].apply(
-        lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-    )
-    df["target_label"] = df["target_repeat"].apply(
-        lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-    )
+    if is_counterfactual:
+        df["source_method"] = df["source_task_name"].apply(extract_method)
+        df["target_method"] = df["target_task_name"].apply(extract_method)
+        df["source_label"] = df["source_method"].apply(lambda m: method_to_display_label(m, plot_config))
+        df["target_label"] = df["target_method"].apply(lambda m: method_to_display_label(m, plot_config))
+    else:
+        df["source_repeat"] = df["source_task_name"].apply(extract_repeat_type)
+        df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
+        df["source_label"] = df["source_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
+        df["target_label"] = df["target_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
     agg = df.groupby(["source_label", "target_label"])[metric_col].agg(["mean", "std"]).reset_index()
     agg.columns = ["source_label", "target_label", "metric_mean", "metric_std"]
     agg["metric_std"] = agg["metric_std"].fillna(0).round(2)
@@ -320,6 +394,7 @@ def _plot_iou_recall_heatmap(
     agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
     agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
 
+    print(f"  {metric.upper()} {'across_repeats' if repeat_type is None else 'across_counterfactual'}: aggregated {len(csv_paths)} seeds -> {len(agg)} cells")
     out_dir.mkdir(parents=True, exist_ok=True)
     x_l = "Target Circuit (Ground Truth)" if metric == "recall" else "Circuit"
     y_l = "Source Circuit (Predicted)" if metric == "recall" else "Circuit"
@@ -342,59 +417,87 @@ def _plot_iou_recall_heatmap(
 
 
 def _aggregate_cross_task_for_heatmap(
-    cross_path: Path,
+    cross_paths: list[Path],
     results_root: Path,
     repeat_type: str | None,
     model_type: str,
     graph_type: str,
     seeds: list[int],
+    repeat_types: list[str] | None,
     is_counterfactual: bool,
     plot_config: dict | None = None,
 ) -> pd.DataFrame | None:
-    """Load cross_task CSV, aggregate, return DataFrame with source_label, target_label, metric_mean, metric_std."""
-    if not cross_path.exists():
+    """Load cross_task CSVs (all seeds), aggregate, return DataFrame with source_label, target_label, metric_mean, metric_std."""
+    dfs = []
+    for p in cross_paths:
+        if not p.exists():
+            continue
+        d = pd.read_csv(p)
+        d["seed"] = d["source_task_name"].apply(lambda x: extract_seed(x) or 0)
+        dfs.append(d)
+    if not dfs:
         return None
-    df = pd.read_csv(cross_path)
+    df = pd.concat(dfs, ignore_index=True)
 
     df["source_repeat"] = df["source_task_name"].apply(extract_repeat_type)
     df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
     df["source_method"] = df["source_task_name"].apply(extract_method)
     df["target_method"] = df["target_task_name"].apply(extract_method)
-    df["seed"] = df["source_task_name"].apply(_extract_seed)
 
+    original_faith: dict[str, dict] = {}
     if is_counterfactual and repeat_type:
-        df["source_label"] = df["source_method"].apply(
-            lambda m: task_name_to_display_label(f"approximate_{m}_0", "replacement", plot_config) or str(m)
-        )
-        df["target_label"] = df["target_method"].apply(
-            lambda m: task_name_to_display_label(f"approximate_{m}_0", "replacement", plot_config) or str(m)
-        )
-        original_faith, _ = load_original_faithfulness(
+        of, _ = load_original_faithfulness(
             results_root, repeat_type, model_type, graph_type, seeds, ["blosum"]
         )
-        norm_rows = []
-        for _, row in df.iterrows():
-            norm = row["faithfulness_by_mean"]
+        original_faith[repeat_type] = of
+    elif not is_counterfactual and repeat_types:
+        for rt in repeat_types:
+            of, _ = load_original_faithfulness(
+                results_root, rt, model_type, graph_type, seeds, ["blosum"]
+            )
+            original_faith[rt] = of
+
+    if is_counterfactual:
+        df["source_label"] = df["source_method"].apply(lambda m: method_to_display_label(m, plot_config))
+        df["target_label"] = df["target_method"].apply(lambda m: method_to_display_label(m, plot_config))
+    else:
+        df["source_label"] = df["source_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
+        df["target_label"] = df["target_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
+
+    norm_rows = []
+    for _, row in df.iterrows():
+        norm = row["faithfulness_by_mean"]
+        target_rt = row["target_repeat"]
+        if target_rt in original_faith:
             key = (row["target_circuit_id"], row["seed"])
-            orig = original_faith.get(key)
+            orig = original_faith[target_rt].get(key)
             if orig and orig > 0:
                 norm = row["faithfulness_by_mean"] / orig
-            norm_rows.append({
-                "source_label": row["source_label"],
-                "target_label": row["target_label"],
-                "metric_mean": norm,
-            })
-        res = pd.DataFrame(norm_rows)
-    else:
-        df["source_label"] = df["source_repeat"].apply(
-            lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-        )
-        df["target_label"] = df["target_repeat"].apply(
-            lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-        )
-        res = df[["source_label", "target_label"]].copy()
-        res["metric_mean"] = df["faithfulness_by_mean"]
+        norm_rows.append({
+            "source_label": row["source_label"],
+            "target_label": row["target_label"],
+            "metric_mean": norm,
+        })
 
+    if not is_counterfactual and repeat_types:
+        circuit_ids_per_rt_seed: dict[tuple[str, int], str] = {}
+        for _, row in df.iterrows():
+            k = (row["target_repeat"], row["seed"])
+            if k not in circuit_ids_per_rt_seed:
+                circuit_ids_per_rt_seed[k] = row["target_circuit_id"]
+        for (rt, _) in circuit_ids_per_rt_seed:
+            lbl = repeat_type_to_display_label(rt, plot_config)
+            norm_rows.append({"source_label": lbl, "target_label": lbl, "metric_mean": 1.0})
+    elif is_counterfactual and repeat_type:
+        seen_method_seed: set[tuple[str, int]] = set()
+        for _, row in df.iterrows():
+            k = (row["target_method"], row["seed"])
+            if k not in seen_method_seed:
+                seen_method_seed.add(k)
+                lbl = method_to_display_label(row["target_method"], plot_config)
+                norm_rows.append({"source_label": lbl, "target_label": lbl, "metric_mean": 1.0})
+
+    res = pd.DataFrame(norm_rows)
     agg = res.groupby(["source_label", "target_label"]).agg(
         metric_mean=("metric_mean", "mean"),
         metric_std=("metric_mean", "std"),
@@ -404,26 +507,34 @@ def _aggregate_cross_task_for_heatmap(
 
 
 def _aggregate_iou_recall_for_heatmap(
-    csv_path: Path,
+    csv_paths: list[Path],
     graph_type: str,
     metric: str,
+    is_counterfactual: bool = False,
     plot_config: dict | None = None,
 ) -> pd.DataFrame | None:
-    """Load iou or recall CSV, aggregate, return DataFrame with source_label, target_label, metric_mean, metric_std."""
-    if not csv_path.exists():
+    """Load iou or recall CSVs (all seeds), aggregate, return DataFrame with source_label, target_label, metric_mean, metric_std."""
+    dfs = []
+    for p in csv_paths:
+        if not p.exists():
+            continue
+        dfs.append(pd.read_csv(p))
+    if not dfs:
         return None
-    df = pd.read_csv(csv_path)
+    df = pd.concat(dfs, ignore_index=True)
     metric_col = f"{metric}_nodes" if graph_type == "nodes" else f"{metric}_edges"
     if metric_col not in df.columns:
         return None
-    df["source_repeat"] = df["source_task_name"].apply(extract_repeat_type)
-    df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
-    df["source_label"] = df["source_repeat"].apply(
-        lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-    )
-    df["target_label"] = df["target_repeat"].apply(
-        lambda x: task_name_to_display_label(f"{x}_blosum_0", "only_repeat_group", plot_config) or str(x)
-    )
+    if is_counterfactual:
+        df["source_method"] = df["source_task_name"].apply(extract_method)
+        df["target_method"] = df["target_task_name"].apply(extract_method)
+        df["source_label"] = df["source_method"].apply(lambda m: method_to_display_label(m, plot_config))
+        df["target_label"] = df["target_method"].apply(lambda m: method_to_display_label(m, plot_config))
+    else:
+        df["source_repeat"] = df["source_task_name"].apply(extract_repeat_type)
+        df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
+        df["source_label"] = df["source_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
+        df["target_label"] = df["target_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
     agg = df.groupby(["source_label", "target_label"])[metric_col].agg(["mean", "std"]).reset_index()
     agg.columns = ["source_label", "target_label", "metric_mean", "metric_std"]
     agg["metric_std"] = agg["metric_std"].fillna(0)
@@ -437,7 +548,11 @@ def _make_heatmap_trace(
     cmap: str = "Blues",
     show_values: bool = True,
 ) -> go.Heatmap:
-    """Build go.Heatmap trace from aggregated DataFrame."""
+    """Build go.Heatmap trace from aggregated DataFrame.
+
+    showscale is always False here; the caller sets it on the rightmost subplot
+    after computing the global vmax.
+    """
     heatmap_data = agg.pivot_table(
         index="source_label",
         columns="target_label",
@@ -459,13 +574,18 @@ def _make_heatmap_trace(
             observed=False,
         )
         std_values = std_data.values if std_data is not None else np.zeros_like(z_values)
+        non_nan_std = std_values[~np.isnan(std_values)]
+        show_std = len(non_nan_std) > 0 and np.any(non_nan_std > 1e-6)
         text = []
         for i in range(z_values.shape[0]):
             row_text = []
             for j in range(z_values.shape[1]):
                 if not np.isnan(z_values[i, j]):
-                    std_val = std_values[i, j] if not np.isnan(std_values[i, j]) else 0.0
-                    row_text.append(f"{z_values[i, j]:.2f}\n±{std_val:.2f}")
+                    if show_std:
+                        std_val = std_values[i, j] if not np.isnan(std_values[i, j]) else 0.0
+                        row_text.append(f"{z_values[i, j]:.2f}<br>±{std_val:.2f}")
+                    else:
+                        row_text.append(f"{z_values[i, j]:.2f}")
                 else:
                     row_text.append("")
             text.append(row_text)
@@ -479,8 +599,8 @@ def _make_heatmap_trace(
         zmax=vmax,
         text=text,
         texttemplate="%{text}" if text else None,
-        textfont={"size": 10},
-        showscale=True,
+        textfont={"size": FONT_SIZE, "color": "white"},
+        showscale=False,
     )
 
 
@@ -510,6 +630,7 @@ def run_combined_heatmaps(
                         graph_type,
                         seeds,
                         methods,
+                        repeat_types,
                         plot_config,
                     )
         else:
@@ -525,6 +646,7 @@ def run_combined_heatmaps(
                         graph_type,
                         seeds,
                         methods,
+                        repeat_types,
                         plot_config,
                     )
 
@@ -539,90 +661,68 @@ def _run_combined_one(
     graph_type: str,
     seeds: list[int],
     methods: list[str],
+    repeat_types: list[str],
     plot_config: dict | None = None,
 ) -> None:
     """Create one combined heatmap figure for a single (mode, rt?, mt, method?)."""
     is_counterfactual = mode == "across_counterfactual"
     if is_counterfactual:
-        cross_path = (
-            results_root
-            / "circuit_discovery_compare"
-            / "cross_task"
-            / "across_counterfactual"
-            / repeat_type
-            / model_type
-            / graph_type
-            / f"seed_{seeds[0]}"
-            / "cross_task_results.csv"
+        cross_paths = [
+            results_root / "circuit_discovery_compare" / "cross_task" / "across_counterfactual"
+            / repeat_type / model_type / graph_type / f"seed_{s}" / "cross_task_results.csv"
+            for s in seeds
+        ]
+        iou_paths = [
+            results_root / "circuit_discovery_compare" / "iou_recall" / "across_counterfactual"
+            / repeat_type / model_type / graph_type / f"seed_{s}" / "iou_results.csv"
+            for s in seeds
+        ]
+        recall_paths = [
+            results_root / "circuit_discovery_compare" / "iou_recall" / "across_counterfactual"
+            / repeat_type / model_type / graph_type / f"seed_{s}" / "recall_results.csv"
+            for s in seeds
+        ]
+        out_dir = (
+            output_dir / _OUTPUT_FOLDER / "combined" / "across_counterfactual" / repeat_type / model_type / graph_type
         )
-        iou_path = (
-            results_root
-            / "circuit_discovery_compare"
-            / "iou_recall"
-            / "across_counterfactual"
-            / repeat_type
-            / model_type
-            / graph_type
-            / f"seed_{seeds[0]}"
-            / "iou_results.csv"
-        )
-        recall_path = (
-            results_root
-            / "circuit_discovery_compare"
-            / "iou_recall"
-            / "across_counterfactual"
-            / repeat_type
-            / model_type
-            / graph_type
-            / f"seed_{seeds[0]}"
-            / "recall_results.csv"
-        )
-        out_dir = output_dir / "compare" / "combined" / "across_counterfactual" / repeat_type / model_type / graph_type
+        fig_width, fig_height = 1200, 450
     else:
         method = method or (methods[0] if methods else "blosum")
-        cross_path = (
-            results_root
-            / "circuit_discovery_compare"
-            / "cross_task"
-            / "across_repeats"
-            / model_type
-            / graph_type
-            / f"seed_{seeds[0]}"
-            / method
-            / "cross_task_results.csv"
-        )
-        iou_path = (
-            results_root
-            / "circuit_discovery_compare"
-            / "iou_recall"
-            / "across_repeats"
-            / model_type
-            / graph_type
-            / f"seed_{seeds[0]}"
-            / method
-            / "iou_results.csv"
-        )
-        recall_path = (
-            results_root
-            / "circuit_discovery_compare"
-            / "iou_recall"
-            / "across_repeats"
-            / model_type
-            / graph_type
-            / f"seed_{seeds[0]}"
-            / method
-            / "recall_results.csv"
-        )
-        out_dir = output_dir / "compare" / "combined" / "across_repeats" / model_type / graph_type / method
+        cross_paths = [
+            results_root / "circuit_discovery_compare" / "cross_task" / "across_repeats"
+            / model_type / graph_type / f"seed_{s}" / method / "cross_task_results.csv"
+            for s in seeds
+        ]
+        iou_paths = [
+            results_root / "circuit_discovery_compare" / "iou_recall" / "across_repeats"
+            / model_type / graph_type / f"seed_{s}" / method / "iou_results.csv"
+            for s in seeds
+        ]
+        recall_paths = [
+            results_root / "circuit_discovery_compare" / "iou_recall" / "across_repeats"
+            / model_type / graph_type / f"seed_{s}" / method / "recall_results.csv"
+            for s in seeds
+        ]
+        out_dir = output_dir / _OUTPUT_FOLDER / "combined" / "across_repeats" / model_type / graph_type / method
+        fig_width, fig_height = 1000, 350
 
-    if not cross_path.exists() or not iou_path.exists() or not recall_path.exists():
+    cross_exist = [p for p in cross_paths if p.exists()]
+    iou_exist = [p for p in iou_paths if p.exists()]
+    recall_exist = [p for p in recall_paths if p.exists()]
+    if not cross_exist or not iou_exist or not recall_exist:
         return
 
     cross_agg = _aggregate_cross_task_for_heatmap(
-        cross_path, results_root, repeat_type, model_type, graph_type, seeds, is_counterfactual, plot_config
+        cross_exist, results_root, repeat_type, model_type, graph_type, seeds,
+        repeat_types if not is_counterfactual else None,
+        is_counterfactual, plot_config
     )
-    iou_agg = _aggregate_iou_recall_for_heatmap(iou_path, graph_type, "iou", plot_config)
-    recall_agg = _aggregate_iou_recall_for_heatmap(recall_path, graph_type, "recall", plot_config)
+    iou_agg = _aggregate_iou_recall_for_heatmap(
+        iou_exist, graph_type, "iou", is_counterfactual=is_counterfactual, plot_config=plot_config
+    )
+    recall_agg = _aggregate_iou_recall_for_heatmap(
+        recall_exist, graph_type, "recall", is_counterfactual=is_counterfactual, plot_config=plot_config
+    )
 
     if cross_agg is None or iou_agg is None or recall_agg is None:
         return
@@ -652,23 +752,58 @@ def _run_combined_one(
     fig.add_trace(h_recall, row=1, col=2)
     fig.add_trace(h_cross, row=1, col=3)
 
-    fig.update_xaxes(tickangle=-15, row=1, col=1)
-    fig.update_xaxes(tickangle=-15, row=1, col=2)
-    fig.update_xaxes(tickangle=-15, row=1, col=3)
-    fig.update_yaxes(autorange="reversed", row=1, col=1)
-    fig.update_yaxes(autorange="reversed", row=1, col=2)
-    fig.update_yaxes(autorange="reversed", row=1, col=3)
+    fig.update_xaxes(tickangle=-15, title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE))
+    fig.update_yaxes(autorange="reversed", title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE))
+    fig.update_yaxes(title_text=None, row=1, col=2)
+    fig.update_yaxes(title_text=None, row=1, col=3)
+
+    # Compute global vmax from all non-NaN z-values across traces
+    all_z: list[float] = []
+    for trace in fig.data:
+        if isinstance(trace, go.Heatmap) and trace.z is not None:
+            for row in trace.z:
+                for v in row:
+                    if v is not None and not np.isnan(float(v)):
+                        all_z.append(float(v))
+
+    if all_z:
+        vmin_global = 0.0
+        vmax_global = min(max(all_z) * 1.05, 1.1) if max(all_z) > 0 else 1.0
+        for trace in fig.data:
+            if isinstance(trace, go.Heatmap):
+                trace.zmin = vmin_global
+                trace.zmax = vmax_global
+        # Show colorbar only on the rightmost subplot
+        fig.update_traces(
+            showscale=True,
+            colorbar=dict(
+                title=dict(text="Value", font=dict(size=FONT_SIZE)),
+                len=1.0,
+                y=0.5,
+                yanchor="middle",
+                tickfont=dict(size=FONT_SIZE),
+            ),
+            row=1,
+            col=3,
+        )
 
     fig.update_layout(
-        width=1200,
-        height=400,
-        margin=dict(l=100, r=100, t=80, b=80),
+        width=fig_width,
+        height=fig_height,
+        margin=dict(l=80, r=100, t=60, b=80),
         font=dict(size=FONT_SIZE),
         plot_bgcolor="white",
         paper_bgcolor="white",
     )
 
+    # Bold subplot titles
+    for i, metric_name in enumerate(["IoU", "Recall", "Cross-Task Faithfulness"]):
+        fig.layout.annotations[i].update(
+            text=f"<b>{metric_name}</b>",
+            font=dict(size=15),
+        )
+
     out_dir.mkdir(parents=True, exist_ok=True)
-    fig.write_image(out_dir / "combined_heatmaps.png", scale=1)
+    fig.write_image(out_dir / "combined_heatmaps.png", scale=2)
     fig.write_image(out_dir / "combined_heatmaps.pdf")
     print(f"Saved {out_dir / 'combined_heatmaps.png'}")

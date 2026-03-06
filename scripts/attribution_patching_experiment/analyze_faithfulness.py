@@ -172,6 +172,7 @@ def _apply_faithfulness_layout(
     )
     if use_log:
         xaxis_cfg["type"] = "log"
+        xaxis_cfg["tickmode"] = "array"
         xaxis_cfg["range"] = [-3, 0]
         xaxis_cfg["tickvals"] = LOG_PCT_TICKVALS
         xaxis_cfg["ticktext"] = LOG_PCT_TICKTEXT
@@ -179,23 +180,23 @@ def _apply_faithfulness_layout(
         max_pct_rounded = int((max_pct_mt * 100) // 10) * 10
         tickvals = [v / 100 for v in range(10, max_pct_rounded + 1, 10)]
         xaxis_cfg["type"] = "linear"
+        xaxis_cfg["tickmode"] = "array"
         xaxis_cfg["range"] = [0, max_pct_mt + 0.02]
         xaxis_cfg["tickvals"] = tickvals
         xaxis_cfg["ticktext"] = [f"{v * 100:.0f}%" for v in tickvals]
         xaxis_cfg["zeroline"] = True
-        xaxis_cfg["nticks"] = 6
     elif convert_to_pct:
         xaxis_cfg["type"] = "linear"
+        xaxis_cfg["tickmode"] = "array"
         xaxis_cfg["range"] = [0, 1.02]
         xaxis_cfg["tickvals"] = [0.2, 0.4, 0.6, 0.8, 1.0]
         xaxis_cfg["ticktext"] = ["20%", "40%", "60%", "80%", "100%"]
         xaxis_cfg["zeroline"] = True
-        xaxis_cfg["nticks"] = 6
 
     fig.update_layout(
         width=fig_width,
         height=fig_width / 1.8,
-        margin=dict(l=60, r=10, t=10, b=60),
+        margin=dict(l=60, r=40, t=10, b=60),
         legend=dict(
             yanchor="bottom",
             y=0.02,
