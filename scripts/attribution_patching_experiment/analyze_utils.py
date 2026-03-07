@@ -177,6 +177,17 @@ def _get_repeat_type_labels(config: Dict[str, Any] | None) -> Dict[str, str]:
 DEFAULT_REPEAT_TYPE_ORDER = ["Synthetic", "Identical", "Approximate"]
 
 
+def sort_repeat_types_for_display(
+    repeat_types: List[str],
+    config: Dict[str, Any] | None = None,
+) -> List[str]:
+    """Return repeat types sorted by display_order.repeat_type (e.g. Synthetic -> Identical -> Approximate)."""
+    labels = [repeat_type_to_display_label(rt, config) for rt in repeat_types]
+    sorted_labels = sort_task_names_for_display(labels, config)
+    label_to_rt = {repeat_type_to_display_label(rt, config): rt for rt in repeat_types}
+    return [label_to_rt[lbl] for lbl in sorted_labels]
+
+
 def sort_task_names_for_display(
     tasks_names: List[str],
     config: Dict[str, Any] | None = None,

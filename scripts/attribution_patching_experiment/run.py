@@ -37,7 +37,7 @@ from run_iou_recall import main as run_iou_recall_main
 from run_cross_task import main as run_cross_task_main
 from analyze_utils import load_plotting_config
 from analyze_faithfulness import run_faithfulness_nodes_edges, run_faithfulness_neurons
-from analyze_compare import run_compare_heatmaps, run_combined_heatmaps
+from analyze_compare import run_compare_heatmaps, run_combined_heatmaps, run_combined_per_metric_heatmaps
 
 # Discover step params (aligned with smart_attribution_launcher.py)
 DISCOVER_ATTRIBUTION_METHOD = "EAP-IG"
@@ -769,6 +769,19 @@ def main():
                     compare_metrics,
                     plot_config,
                 )
+                if set(args.repeat_types) >= {"synthetic", "identical", "approximate"} and "across_counterfactual" in compare_modes:
+                    run_combined_per_metric_heatmaps(
+                        results_root,
+                        results_root / "circuit_discovery_compare",
+                        args.repeat_types,
+                        args.model_types,
+                        args.methods,
+                        args.seeds,
+                        args.graph_type,
+                        compare_modes,
+                        compare_metrics,
+                        plot_config,
+                    )
                 if set(compare_metrics) >= {"cross_task", "iou", "recall"}:
                     run_combined_heatmaps(
                         results_root,

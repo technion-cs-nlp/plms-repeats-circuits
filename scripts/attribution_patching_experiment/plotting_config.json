@@ -1,4 +1,8 @@
 {
+  "display_order": {
+    "repeat_type": ["Synthetic", "Identical", "Approximate"],
+    "method": ["mask", "blosum-opposite50", "permutation", "blosum", "blosum-opposite", "mask50", "blosum50", "mask20", "blosum20", "blosum-opposite20"]
+  },
   "default": {
     "faithfulness": {
       "grey_area_lower": 0.84,

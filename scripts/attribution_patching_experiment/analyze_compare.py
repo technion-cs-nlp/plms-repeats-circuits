@@ -20,6 +20,7 @@ from analyze_utils import (
     method_to_display_label,
     repeat_type_to_display_label,
     plot_heatmap_plotly,
+    sort_repeat_types_for_display,
     sort_task_names_for_display,
 )
 
@@ -1081,3 +1082,268 @@ def _run_combined_one(
     fig.write_image(out_dir / "combined_heatmaps.png", scale=2)
     fig.write_image(out_dir / "combined_heatmaps.pdf")
     print(f"Saved {out_dir / 'combined_heatmaps.png'}")
+
+
+def _build_combined_figure_from_aggs(
+    aggs: list[pd.DataFrame],
+    subplot_titles: list[str],
+    vmin: float,
+    vmax: float,
+    x_label: str,
+    y_label: str,
+    metric_label: str,
+    fig_width: int,
+    fig_height: int,
+    square_aspect: bool = False,
+    plot_config: dict | None = None,
+) -> go.Figure:
+    """Build a combined figure from a list of aggs. Shared by all-metrics and per-metric combined."""
+    n_cols = len(aggs)
+    if n_cols == 0:
+        return go.Figure()
+
+    source_labels = set()
+    target_labels = set()
+    for a in aggs:
+        source_labels.update(a["source_label"].unique())
+        target_labels.update(a["target_label"].unique())
+    source_order = sort_task_names_for_display(list(source_labels), plot_config)
+    target_order = sort_task_names_for_display(list(target_labels), plot_config)
+    for agg in aggs:
+        agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
+        agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
+
+    fig = make_subplots(
+        rows=1,
+        cols=n_cols,
+        subplot_titles=subplot_titles,
+        horizontal_spacing=0.08,
+        shared_yaxes=True,
+    )
+    all_z: list[float] = []
+    for col_idx, agg in enumerate(aggs):
+        h = _make_heatmap_trace(agg, vmin=vmin, vmax=vmax)
+        fig.add_trace(h, row=1, col=col_idx + 1)
+        if h.z is not None:
+            for row in h.z:
+                for v in row:
+                    if v is not None and not np.isnan(float(v)):
+                        all_z.append(float(v))
+        fig.update_xaxes(
+            title_text=x_label,
+            tickangle=-15,
+            title_font=dict(size=FONT_SIZE),
+            tickfont=dict(size=FONT_SIZE),
+            row=1,
+            col=col_idx + 1,
+        )
+        y_ax = dict(
+            title_text=y_label if col_idx == 0 else None,
+            autorange="reversed",
+            title_font=dict(size=FONT_SIZE),
+            tickfont=dict(size=FONT_SIZE),
+            row=1,
+            col=col_idx + 1,
+        )
+        if square_aspect:
+            y_ax["scaleanchor"] = "x" if col_idx == 0 else f"x{col_idx + 1}"
+            y_ax["scaleratio"] = 1
+            y_ax["constrain"] = "domain"
+        fig.update_yaxes(**y_ax)
+
+    if all_z:
+        vmax_global = min(max(all_z) * 1.05, vmax) if max(all_z) > 0 else vmax
+        for trace in fig.data:
+            if isinstance(trace, go.Heatmap):
+                trace.zmin = vmin
+                trace.zmax = vmax_global
+        fig.update_traces(
+            showscale=True,
+            colorbar=dict(
+                title=dict(text=metric_label, font=dict(size=FONT_SIZE)),
+                len=0.6,
+                y=0.5,
+                yanchor="middle",
+                tickfont=dict(size=FONT_SIZE),
+            ),
+            row=1,
+            col=n_cols,
+        )
+
+    fig.update_layout(
+        width=fig_width,
+        height=fig_height,
+        margin=dict(l=80, r=150, t=60, b=130),
+        font=dict(size=FONT_SIZE),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+    )
+    for i, title in enumerate(subplot_titles):
+        if i < len(fig.layout.annotations):
+            fig.layout.annotations[i].update(text=f"<b>{title}</b>", font=dict(size=15))
+    return fig
+
+
+def run_combined_per_metric_heatmaps(
+    results_root: Path,
+    output_dir: Path,
+    repeat_types: list[str],
+    model_types: list[str],
+    methods: list[str],
+    seeds: list[int],
+    graph_type: str,
+    compare_modes: list[str],
+    compare_metrics: list[str],
+    plot_config: dict | None = None,
+) -> None:
+    # Map user metric names to internal keys
+    metric_map = {"cross_task": "cross_task", "iou": "iou", "recall": "recall"}
+    metrics_to_run = [metric_map[m] for m in compare_metrics if m in metric_map]
+    if not metrics_to_run:
+        return
+
+    heatmap_cfg = get_heatmap_config(plot_config or {})
+    plot_with_circuit_sizes = heatmap_cfg.get("plot_with_circuit_sizes", False)
+    fig_width, fig_height = 1500, 600
+
+    for mode in compare_modes:
+        is_counterfactual = mode == "across_counterfactual"
+        if is_counterfactual:
+            if len(repeat_types) < 3:
+                continue
+            for mt in model_types:
+                for metric_key in metrics_to_run:
+                    aggs = []
+                    titles = []
+                    for rt in sort_repeat_types_for_display(repeat_types, plot_config):
+                        if metric_key == "cross_task":
+                            paths = [
+                                results_root / "circuit_discovery_compare" / "cross_task" / "across_counterfactual"
+                                / rt / mt / graph_type / f"seed_{s}" / "cross_task_results.csv"
+                                for s in seeds
+                            ]
+                            agg = _aggregate_cross_task_for_heatmap(
+                                [p for p in paths if p.exists()],
+                                results_root,
+                                rt,
+                                mt,
+                                graph_type,
+                                seeds,
+                                None,
+                                True,
+                                plot_with_circuit_sizes=plot_with_circuit_sizes,
+                                plot_config=plot_config,
+                            )
+                        else:
+                            paths = [
+                                results_root / "circuit_discovery_compare" / "iou_recall" / "across_counterfactual"
+                                / rt / mt / graph_type / f"seed_{s}" / f"{metric_key}_results.csv"
+                                for s in seeds
+                            ]
+                            agg = _aggregate_iou_recall_for_heatmap(
+                                [p for p in paths if p.exists()],
+                                results_root,
+                                mt,
+                                graph_type,
+                                metric_key,
+                                rt,
+                                seeds,
+                                [rt],
+                                plot_with_circuit_sizes,
+                                is_counterfactual=True,
+                                plot_config=plot_config,
+                            )
+                        if agg is not None:
+                            aggs.append(agg)
+                            titles.append(repeat_type_to_display_label(rt, plot_config))
+                    if len(aggs) < 2:
+                        continue
+                    fig = _build_combined_figure_from_aggs(
+                        aggs,
+                        titles,
+                        vmin=0.0,
+                        vmax=1.1 if metric_key == "cross_task" else 1.0,
+                        x_label="Dataset",
+                        y_label="Circuit",
+                        metric_label="Faithfulness" if metric_key == "cross_task" else metric_key.upper(),
+                        fig_width=fig_width,
+                        fig_height=fig_height,
+                        square_aspect=True,
+                        plot_config=plot_config,
+                    )
+                    out_dir = output_dir / _OUTPUT_FOLDER / "across_counterfactual"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    fname = f"combined_{mt}_{graph_type}_{metric_key}"
+                    fig.write_image(out_dir / f"{fname}.png", scale=2)
+                    fig.write_image(out_dir / f"{fname}.pdf")
+                    print(f"Saved {out_dir / (fname + '.png')} (per-metric {metric_key})")
+        else:
+            if len(methods) < 2:
+                continue
+            for mt in model_types:
+                for metric_key in metrics_to_run:
+                    aggs = []
+                    titles = []
+                    for method in methods:
+                        if metric_key == "cross_task":
+                            paths = [
+                                results_root / "circuit_discovery_compare" / "cross_task" / "across_repeats"
+                                / mt / graph_type / f"seed_{s}" / method / "cross_task_results.csv"
+                                for s in seeds
+                            ]
+                            agg = _aggregate_cross_task_for_heatmap(
+                                [p for p in paths if p.exists()],
+                                results_root,
+                                None,
+                                mt,
+                                graph_type,
+                                seeds,
+                                repeat_types,
+                                False,
+                                plot_with_circuit_sizes=plot_with_circuit_sizes,
+                                plot_config=plot_config,
+                            )
+                        else:
+                            paths = [
+                                results_root / "circuit_discovery_compare" / "iou_recall" / "across_repeats"
+                                / mt / graph_type / f"seed_{s}" / method / f"{metric_key}_results.csv"
+                                for s in seeds
+                            ]
+                            agg = _aggregate_iou_recall_for_heatmap(
+                                [p for p in paths if p.exists()],
+                                results_root,
+                                mt,
+                                graph_type,
+                                metric_key,
+                                None,
+                                seeds,
+                                repeat_types,
+                                plot_with_circuit_sizes,
+                                is_counterfactual=False,
+                                plot_config=plot_config,
+                            )
+                        if agg is not None:
+                            aggs.append(agg)
+                            titles.append(method_to_display_label(method, plot_config))
+                    if len(aggs) < 2:
+                        continue
+                    x_label = "Circuit" if metric_key != "cross_task" else "Dataset"
+                    fig = _build_combined_figure_from_aggs(
+                        aggs,
+                        titles,
+                        vmin=0.0,
+                        vmax=1.1 if metric_key == "cross_task" else 1.0,
+                        x_label=x_label,
+                        y_label="Circuit",
+                        metric_label="Faithfulness" if metric_key == "cross_task" else metric_key.upper(),
+                        fig_width=fig_width,
+                        fig_height=fig_height,
+                        square_aspect=True,
+                        plot_config=plot_config,
+                    )
+                    out_dir = output_dir / _OUTPUT_FOLDER / "across_repeats"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    fname = f"combined_{mt}_{graph_type}_{metric_key}"
+                    fig.write_image(out_dir / f"{fname}.png", scale=2)
+                    fig.write_image(out_dir / f"{fname}.pdf")
+                    print(f"Saved {out_dir / (fname + '.png')} (per-metric {metric_key})")
