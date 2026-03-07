@@ -743,6 +743,7 @@ def main():
                     args.seeds,
                     args.graph_type,
                     plot_config,
+                    compare_modes=compare_modes,
                 )
             if args.graph_type == "neurons":
                 run_faithfulness_neurons(

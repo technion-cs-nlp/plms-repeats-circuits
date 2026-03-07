@@ -333,14 +333,18 @@ def run_faithfulness_nodes_edges(
     seeds: list[int],
     graph_type: str,
     plot_config: dict[str, Any],
+    compare_modes: list[str] | None = None,
 ) -> None:
-    """Plot faithfulness for nodes/edges in both modes: across_counterfactual and across_repeats."""
-    _run_faithfulness_across_counterfactual(
-        results_root, output_dir, repeat_types, model_types, methods, seeds, graph_type, plot_config
-    )
-    _run_faithfulness_across_repeats(
-        results_root, output_dir, repeat_types, model_types, methods, seeds, graph_type, plot_config
-    )
+    """Plot faithfulness for nodes/edges. Only runs modes in compare_modes (default: both)."""
+    modes = compare_modes or ["across_counterfactual", "across_repeats"]
+    if "across_counterfactual" in modes:
+        _run_faithfulness_across_counterfactual(
+            results_root, output_dir, repeat_types, model_types, methods, seeds, graph_type, plot_config
+        )
+    if "across_repeats" in modes:
+        _run_faithfulness_across_repeats(
+            results_root, output_dir, repeat_types, model_types, methods, seeds, graph_type, plot_config
+        )
 
 
 def _extract_neurons_attn_mlp_stats(csv_files: dict[int, Path]) -> tuple[float, float, float, float]:
