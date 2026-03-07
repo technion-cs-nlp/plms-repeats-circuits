@@ -46,4 +46,5 @@ results_cross_task_new/
 results_cross_task_old/
 scripts/circuit_discovery_experiment/verification/
 scripts/circuit_discovery_experiment/run_discover_sbatch.sh
+scripts/circuit_discovery_experiment/run_compare_sbatch.sh
 scripts/circuit_discovery_experiment/copy_legacy_circuits.py
