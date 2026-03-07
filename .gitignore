@@ -20,7 +20,6 @@ results/
 scripts/evaluation_experiment/run_evaluate_sbatch.sh
 
 datasets2
-
 results2/
 results3/
 results4/
@@ -48,3 +47,4 @@ scripts/circuit_discovery_experiment/verification/
 scripts/circuit_discovery_experiment/run_discover_sbatch.sh
 scripts/circuit_discovery_experiment/run_compare_sbatch.sh
 scripts/circuit_discovery_experiment/copy_legacy_circuits.py
+scripts/component_recurrence_stats/compare_component_recurrence_old_new.py

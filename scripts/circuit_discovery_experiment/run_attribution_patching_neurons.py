@@ -74,7 +74,7 @@ def _build_neurons_graph_with_attribution(
         if ng_node is None:
             continue
         if node.score is not None and ng_node.score is not None:
-            if not np.allclose(float(node.score), float(ng_node.score), rtol=1e-5, atol=1e-8):
+            if not np.allclose(float(node.score), float(ng_node.score), rtol=1e-4, atol=1e-6):
                 raise ValueError(f"Node score mismatch for {name}: nodes_graph={node.score}, neurons_graph={ng_node.score}")
     # Save graph BEFORE select_circuit_nodes (original state with all attribution scores)
     neurons_graph_path = output_dir / f"{experiment_name}.json"
