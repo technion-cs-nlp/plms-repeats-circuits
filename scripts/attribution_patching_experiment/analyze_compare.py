@@ -27,6 +27,51 @@ from analyze_utils import (
 _OUTPUT_FOLDER = "heatmaps"
 
 
+def _update_labels_with_circuit_sizes(
+    results_df: pd.DataFrame,
+    agg: pd.DataFrame,
+    target_order: list,
+    graph_type: str,
+) -> None:
+    """Append circuit size (mean ± std) to target labels. Modifies agg in place."""
+    if "target_circuit_size" not in results_df.columns:
+        return
+    label_size_info: dict[str, str] = {}
+    for target_label in target_order:
+        target_rows = results_df[results_df["target_label"] == target_label]
+        sizes = []
+        seen_seeds: set[int | None] = set()
+        for _, row in target_rows.iterrows():
+            if pd.notna(row.get("target_circuit_size")):
+                size = row["target_circuit_size"]
+                seed = row.get("seed")
+                if seed not in seen_seeds:
+                    seen_seeds.add(seed)
+                    sizes.append(float(size))
+        if len(sizes) > 0:
+            if graph_type == "edges":
+                mean_sz = np.mean(sizes) * 100
+                if len(sizes) > 1:
+                    std_sz = np.std(sizes) * 100
+                    label_size_info[target_label] = f"{target_label}\n({mean_sz:.2f} ± {std_sz:.2f}%)"
+                else:
+                    label_size_info[target_label] = f"{target_label}\n({mean_sz:.2f}%)"
+            else:
+                mean_sz = np.mean(sizes)
+                if len(sizes) > 1:
+                    std_sz = np.std(sizes)
+                    label_size_info[target_label] = f"{target_label}\n({mean_sz:.0f} ± {std_sz:.0f})"
+                else:
+                    label_size_info[target_label] = f"{target_label}\n({mean_sz:.0f})"
+        else:
+            label_size_info[target_label] = target_label
+    new_target_order = [label_size_info.get(lbl, lbl) for lbl in target_order]
+    agg["target_label"] = agg["target_label"].apply(lambda x: label_size_info.get(x, x))
+    agg["target_label"] = pd.Categorical(
+        agg["target_label"], categories=new_target_order, ordered=True
+    )
+
+
 def run_compare_heatmaps(
     results_root: Path,
     output_dir: Path,
@@ -134,11 +179,14 @@ def _run_compare_across_counterfactual(
                 _plot_iou_recall_heatmap(
                     iou_exist,
                     output_dir / _OUTPUT_FOLDER / "across_counterfactual" / metric / rt / model_type / graph_type,
+                    results_root,
                     rt,
                     model_type,
                     graph_type,
                     metric,
                     plot_with_circuit_sizes,
+                    seeds,
+                    [rt],
                     is_counterfactual=True,
                     plot_config=plot_config,
                 )
@@ -205,11 +253,14 @@ def _run_compare_across_repeats(
                 _plot_iou_recall_heatmap(
                     iou_exist,
                     output_dir / _OUTPUT_FOLDER / "across_repeats" / metric / model_type / graph_type / method,
+                    results_root,
                     None,
                     model_type,
                     graph_type,
                     metric,
                     plot_with_circuit_sizes,
+                    seeds,
+                    repeat_types,
                     is_counterfactual=False,
                     plot_config=plot_config,
                 )
@@ -253,64 +304,93 @@ def _plot_cross_task_heatmap(
         df["source_label"] = df["source_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
         df["target_label"] = df["target_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
 
-    # Load original faithfulness: for across_counterfactual one repeat_type; for across_repeats all
+    # Load original faithfulness and sizes: for across_counterfactual one repeat_type; for across_repeats all
     original_faith: dict[str, dict] = {}
+    circuit_sizes: dict[str, dict] = {}
     if is_counterfactual and repeat_type:
-        of, _ = load_original_faithfulness(
+        of, sz = load_original_faithfulness(
             results_root, repeat_type, model_type, graph_type, seeds, ["blosum"]
         )
         original_faith[repeat_type] = of
+        circuit_sizes[repeat_type] = sz
     elif not is_counterfactual and repeat_types:
         for rt in repeat_types:
-            of, _ = load_original_faithfulness(
+            of, sz = load_original_faithfulness(
                 results_root, rt, model_type, graph_type, seeds, ["blosum"]
             )
             original_faith[rt] = of
+            circuit_sizes[rt] = sz
+
+    def _get_target_size(row: pd.Series, cid: str, seed_val: int, rt: str) -> float | None:
+        key = (cid, seed_val)
+        if rt in circuit_sizes and key in circuit_sizes[rt]:
+            return circuit_sizes[rt][key]
+        if graph_type == "nodes":
+            return row.get("real_n_nodes", row.get("n_nodes"))
+        return row.get("real_pct_edges", row.get("real_pct_nodes", row.get("pct_nodes")))
 
     norm_rows = []
     for _, row in df.iterrows():
         norm = row["faithfulness_by_mean"]
         target_rt = row["target_repeat"]
+        seed_val = int(row["seed"])
         if target_rt in original_faith:
-            key = (row["target_circuit_id"], row["seed"])
+            key = (row["target_circuit_id"], seed_val)
             orig = original_faith[target_rt].get(key)
             if orig and orig > 0:
                 norm = row["faithfulness_by_mean"] / orig
-        target_size = row.get("real_pct_nodes", row.get("real_n_nodes"))
+        target_size = (
+            _get_target_size(row, row["target_circuit_id"], seed_val, target_rt)
+            if plot_with_circuit_sizes
+            else None
+        )
         norm_rows.append({
             "source_label": row["source_label"],
             "target_label": row["target_label"],
             "faithfulness_by_mean": norm,
             "target_circuit_size": target_size,
+            "seed": seed_val,
         })
 
     # Add diagonal entries (self->self = 1.0); cross_task CSVs omit same->same pairs
     if not is_counterfactual and repeat_types:
         circuit_ids_per_rt_seed: dict[tuple[str, int], str] = {}
         for _, row in df.iterrows():
-            k = (row["target_repeat"], row["seed"])
+            k = (row["target_repeat"], int(row["seed"]))
             if k not in circuit_ids_per_rt_seed:
                 circuit_ids_per_rt_seed[k] = row["target_circuit_id"]
-        for (rt, seed), _ in circuit_ids_per_rt_seed.items():
+        for (rt, seed), cid in circuit_ids_per_rt_seed.items():
             lbl = repeat_type_to_display_label(rt, plot_config)
+            diag_size = (
+                circuit_sizes.get(rt, {}).get((cid, seed)) if plot_with_circuit_sizes else None
+            )
             norm_rows.append({
                 "source_label": lbl,
                 "target_label": lbl,
                 "faithfulness_by_mean": 1.0,
-                "target_circuit_size": None,
+                "target_circuit_size": diag_size,
+                "seed": seed,
             })
     elif is_counterfactual and repeat_type:
         seen_method_seed: set[tuple[str, int]] = set()
         for _, row in df.iterrows():
-            k = (row["target_method"], row["seed"])
+            k = (row["target_method"], int(row["seed"]))
             if k not in seen_method_seed:
                 seen_method_seed.add(k)
                 lbl = method_to_display_label(row["target_method"], plot_config)
+                cid = row["target_circuit_id"]
+                seed_val = int(row["seed"])
+                diag_size = (
+                    circuit_sizes.get(repeat_type, {}).get((cid, seed_val))
+                    if plot_with_circuit_sizes
+                    else None
+                )
                 norm_rows.append({
                     "source_label": lbl,
                     "target_label": lbl,
                     "faithfulness_by_mean": 1.0,
-                    "target_circuit_size": None,
+                    "target_circuit_size": diag_size,
+                    "seed": seed_val,
                 })
 
     res = pd.DataFrame(norm_rows)
@@ -325,6 +405,9 @@ def _plot_cross_task_heatmap(
     target_order = sort_task_names_for_display(agg["target_label"].unique().tolist(), plot_config)
     agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
     agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
+
+    if plot_with_circuit_sizes:
+        _update_labels_with_circuit_sizes(res, agg, target_order, graph_type)
 
     print(f"  Cross-task {mode}: aggregated {len(csv_paths)} seeds, {len(res)} rows -> {len(agg)} cells")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -349,11 +432,14 @@ def _plot_cross_task_heatmap(
 def _plot_iou_recall_heatmap(
     csv_paths: list[Path],
     out_dir: Path,
+    results_root: Path,
     repeat_type: str | None,
     model_type: str,
     graph_type: str,
     metric: str,
     plot_with_circuit_sizes: bool,
+    seeds: list[int],
+    repeat_types: list[str],
     is_counterfactual: bool = False,
     plot_config: dict | None = None,
 ) -> None:
@@ -366,7 +452,18 @@ def _plot_iou_recall_heatmap(
     for p in csv_paths:
         if not p.exists():
             continue
-        dfs.append(pd.read_csv(p))
+        d = pd.read_csv(p)
+        # Extract seed from path (e.g. .../seed_42/...)
+        seed_val = 0
+        for part in p.parts:
+            if part.startswith("seed_"):
+                try:
+                    seed_val = int(part.split("_")[1])
+                    break
+                except (IndexError, ValueError):
+                    pass
+        d["seed"] = seed_val
+        dfs.append(d)
     if not dfs:
         return
     df = pd.concat(dfs, ignore_index=True)
@@ -374,6 +471,31 @@ def _plot_iou_recall_heatmap(
     metric_col = f"{metric}_nodes" if graph_type == "nodes" else f"{metric}_edges"
     if metric_col not in df.columns:
         return
+
+    df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
+    circuit_sizes: dict[str, dict] = {}
+    if plot_with_circuit_sizes:
+        rts = [repeat_type] if is_counterfactual and repeat_type else repeat_types
+        for rt in rts:
+            if rt:
+                _, sz = load_original_faithfulness(
+                    results_root, rt, model_type, graph_type, seeds, ["blosum"]
+                )
+                circuit_sizes[rt] = sz
+
+    if plot_with_circuit_sizes and circuit_sizes:
+        def _size_for(row: pd.Series) -> float | None:
+            rt = row["target_repeat"]
+            if not rt and is_counterfactual and repeat_type:
+                rt = repeat_type
+            if rt and rt in circuit_sizes:
+                key = (row["target_circuit_id"], row["seed"])
+                return circuit_sizes[rt].get(key)
+            return None
+
+        df["target_circuit_size"] = df.apply(_size_for, axis=1)
+    else:
+        df["target_circuit_size"] = None
     if is_counterfactual:
         df["source_method"] = df["source_task_name"].apply(extract_method)
         df["target_method"] = df["target_task_name"].apply(extract_method)
@@ -393,6 +515,9 @@ def _plot_iou_recall_heatmap(
     target_order = sort_task_names_for_display(agg["target_label"].unique().tolist(), plot_config)
     agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
     agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
+
+    if plot_with_circuit_sizes and "target_circuit_size" in df.columns and df["target_circuit_size"].notna().any():
+        _update_labels_with_circuit_sizes(df, agg, target_order, graph_type)
 
     print(f"  {metric.upper()} {'across_repeats' if repeat_type is None else 'across_counterfactual'}: aggregated {len(csv_paths)} seeds -> {len(agg)} cells")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -425,6 +550,7 @@ def _aggregate_cross_task_for_heatmap(
     seeds: list[int],
     repeat_types: list[str] | None,
     is_counterfactual: bool,
+    plot_with_circuit_sizes: bool = False,
     plot_config: dict | None = None,
 ) -> pd.DataFrame | None:
     """Load cross_task CSVs (all seeds), aggregate, return DataFrame with source_label, target_label, metric_mean, metric_std."""
@@ -445,17 +571,28 @@ def _aggregate_cross_task_for_heatmap(
     df["target_method"] = df["target_task_name"].apply(extract_method)
 
     original_faith: dict[str, dict] = {}
+    circuit_sizes: dict[str, dict] = {}
     if is_counterfactual and repeat_type:
-        of, _ = load_original_faithfulness(
+        of, sz = load_original_faithfulness(
             results_root, repeat_type, model_type, graph_type, seeds, ["blosum"]
         )
         original_faith[repeat_type] = of
+        circuit_sizes[repeat_type] = sz
     elif not is_counterfactual and repeat_types:
         for rt in repeat_types:
-            of, _ = load_original_faithfulness(
+            of, sz = load_original_faithfulness(
                 results_root, rt, model_type, graph_type, seeds, ["blosum"]
             )
             original_faith[rt] = of
+            circuit_sizes[rt] = sz
+
+    def _get_target_size(row: pd.Series, cid: str, seed_val: int, rt: str) -> float | None:
+        key = (cid, seed_val)
+        if rt in circuit_sizes and key in circuit_sizes[rt]:
+            return circuit_sizes[rt][key]
+        if graph_type == "nodes":
+            return row.get("real_n_nodes", row.get("n_nodes"))
+        return row.get("real_pct_edges", row.get("real_pct_nodes", row.get("pct_nodes")))
 
     if is_counterfactual:
         df["source_label"] = df["source_method"].apply(lambda m: method_to_display_label(m, plot_config))
@@ -468,34 +605,64 @@ def _aggregate_cross_task_for_heatmap(
     for _, row in df.iterrows():
         norm = row["faithfulness_by_mean"]
         target_rt = row["target_repeat"]
+        seed_val = int(row["seed"])
         if target_rt in original_faith:
-            key = (row["target_circuit_id"], row["seed"])
+            key = (row["target_circuit_id"], seed_val)
             orig = original_faith[target_rt].get(key)
             if orig and orig > 0:
                 norm = row["faithfulness_by_mean"] / orig
+        target_size = (
+            _get_target_size(row, row["target_circuit_id"], seed_val, target_rt)
+            if plot_with_circuit_sizes
+            else None
+        )
         norm_rows.append({
             "source_label": row["source_label"],
             "target_label": row["target_label"],
             "metric_mean": norm,
+            "target_circuit_size": target_size,
+            "seed": seed_val,
         })
 
     if not is_counterfactual and repeat_types:
         circuit_ids_per_rt_seed: dict[tuple[str, int], str] = {}
         for _, row in df.iterrows():
-            k = (row["target_repeat"], row["seed"])
+            k = (row["target_repeat"], int(row["seed"]))
             if k not in circuit_ids_per_rt_seed:
                 circuit_ids_per_rt_seed[k] = row["target_circuit_id"]
-        for (rt, _) in circuit_ids_per_rt_seed:
+        for (rt, seed), cid in circuit_ids_per_rt_seed.items():
             lbl = repeat_type_to_display_label(rt, plot_config)
-            norm_rows.append({"source_label": lbl, "target_label": lbl, "metric_mean": 1.0})
+            diag_size = (
+                circuit_sizes.get(rt, {}).get((cid, seed)) if plot_with_circuit_sizes else None
+            )
+            norm_rows.append({
+                "source_label": lbl,
+                "target_label": lbl,
+                "metric_mean": 1.0,
+                "target_circuit_size": diag_size,
+                "seed": seed,
+            })
     elif is_counterfactual and repeat_type:
         seen_method_seed: set[tuple[str, int]] = set()
         for _, row in df.iterrows():
-            k = (row["target_method"], row["seed"])
+            k = (row["target_method"], int(row["seed"]))
             if k not in seen_method_seed:
                 seen_method_seed.add(k)
                 lbl = method_to_display_label(row["target_method"], plot_config)
-                norm_rows.append({"source_label": lbl, "target_label": lbl, "metric_mean": 1.0})
+                cid = row["target_circuit_id"]
+                seed_val = int(row["seed"])
+                diag_size = (
+                    circuit_sizes.get(repeat_type, {}).get((cid, seed_val))
+                    if plot_with_circuit_sizes
+                    else None
+                )
+                norm_rows.append({
+                    "source_label": lbl,
+                    "target_label": lbl,
+                    "metric_mean": 1.0,
+                    "target_circuit_size": diag_size,
+                    "seed": seed_val,
+                })
 
     res = pd.DataFrame(norm_rows)
     agg = res.groupby(["source_label", "target_label"]).agg(
@@ -503,13 +670,27 @@ def _aggregate_cross_task_for_heatmap(
         metric_std=("metric_mean", "std"),
     ).reset_index()
     agg["metric_std"] = agg["metric_std"].fillna(0)
+
+    source_order = sort_task_names_for_display(agg["source_label"].unique().tolist(), plot_config)
+    target_order = sort_task_names_for_display(agg["target_label"].unique().tolist(), plot_config)
+    agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
+    agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
+    if plot_with_circuit_sizes and "target_circuit_size" in res.columns and res["target_circuit_size"].notna().any():
+        _update_labels_with_circuit_sizes(res, agg, target_order, graph_type)
+
     return agg
 
 
 def _aggregate_iou_recall_for_heatmap(
     csv_paths: list[Path],
+    results_root: Path,
+    model_type: str,
     graph_type: str,
     metric: str,
+    repeat_type: str | None,
+    seeds: list[int],
+    repeat_types: list[str],
+    plot_with_circuit_sizes: bool,
     is_counterfactual: bool = False,
     plot_config: dict | None = None,
 ) -> pd.DataFrame | None:
@@ -518,13 +699,35 @@ def _aggregate_iou_recall_for_heatmap(
     for p in csv_paths:
         if not p.exists():
             continue
-        dfs.append(pd.read_csv(p))
+        d = pd.read_csv(p)
+        seed_val = 0
+        for part in p.parts:
+            if part.startswith("seed_"):
+                try:
+                    seed_val = int(part.split("_")[1])
+                    break
+                except (IndexError, ValueError):
+                    pass
+        d["seed"] = seed_val
+        dfs.append(d)
     if not dfs:
         return None
     df = pd.concat(dfs, ignore_index=True)
     metric_col = f"{metric}_nodes" if graph_type == "nodes" else f"{metric}_edges"
     if metric_col not in df.columns:
         return None
+
+    df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
+    circuit_sizes: dict[str, dict] = {}
+    if plot_with_circuit_sizes:
+        rts = [repeat_type] if is_counterfactual and repeat_type else repeat_types
+        for rt in rts:
+            if rt:
+                _, sz = load_original_faithfulness(
+                    results_root, rt, model_type, graph_type, seeds, ["blosum"]
+                )
+                circuit_sizes[rt] = sz
+
     if is_counterfactual:
         df["source_method"] = df["source_task_name"].apply(extract_method)
         df["target_method"] = df["target_task_name"].apply(extract_method)
@@ -535,9 +738,32 @@ def _aggregate_iou_recall_for_heatmap(
         df["target_repeat"] = df["target_task_name"].apply(extract_repeat_type)
         df["source_label"] = df["source_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
         df["target_label"] = df["target_repeat"].apply(lambda x: repeat_type_to_display_label(x, plot_config))
+
+    if plot_with_circuit_sizes and circuit_sizes:
+        def _size_for(row: pd.Series) -> float | None:
+            rt = row["target_repeat"]
+            if not rt and is_counterfactual and repeat_type:
+                rt = repeat_type
+            if rt and rt in circuit_sizes:
+                key = (row["target_circuit_id"], row["seed"])
+                return circuit_sizes[rt].get(key)
+            return None
+
+        df["target_circuit_size"] = df.apply(_size_for, axis=1)
+    else:
+        df["target_circuit_size"] = None
+
     agg = df.groupby(["source_label", "target_label"])[metric_col].agg(["mean", "std"]).reset_index()
     agg.columns = ["source_label", "target_label", "metric_mean", "metric_std"]
     agg["metric_std"] = agg["metric_std"].fillna(0)
+
+    source_order = sort_task_names_for_display(agg["source_label"].unique().tolist(), plot_config)
+    target_order = sort_task_names_for_display(agg["target_label"].unique().tolist(), plot_config)
+    agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
+    agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
+    if plot_with_circuit_sizes and "target_circuit_size" in df.columns and df["target_circuit_size"].notna().any():
+        _update_labels_with_circuit_sizes(df, agg, target_order, graph_type)
+
     return agg
 
 
@@ -616,6 +842,8 @@ def run_combined_heatmaps(
     plot_config: dict | None = None,
 ) -> None:
     """Create combined figure with IoU, Recall, Cross-Task Faithfulness subplots."""
+    heatmap_cfg = get_heatmap_config(plot_config or {})
+    plot_with_circuit_sizes = heatmap_cfg.get("plot_with_circuit_sizes", False)
     for mode in compare_modes:
         if mode == "across_counterfactual":
             for rt in repeat_types:
@@ -632,6 +860,7 @@ def run_combined_heatmaps(
                         methods,
                         repeat_types,
                         plot_config,
+                        plot_with_circuit_sizes,
                     )
         else:
             for mt in model_types:
@@ -648,6 +877,7 @@ def run_combined_heatmaps(
                         methods,
                         repeat_types,
                         plot_config,
+                        plot_with_circuit_sizes,
                     )
 
 
@@ -663,6 +893,7 @@ def _run_combined_one(
     methods: list[str],
     repeat_types: list[str],
     plot_config: dict | None = None,
+    plot_with_circuit_sizes: bool = False,
 ) -> None:
     """Create one combined heatmap figure for a single (mode, rt?, mt, method?)."""
     is_counterfactual = mode == "across_counterfactual"
@@ -713,28 +944,57 @@ def _run_combined_one(
         return
 
     cross_agg = _aggregate_cross_task_for_heatmap(
-        cross_exist, results_root, repeat_type, model_type, graph_type, seeds,
+        cross_exist,
+        results_root,
+        repeat_type,
+        model_type,
+        graph_type,
+        seeds,
         repeat_types if not is_counterfactual else None,
-        is_counterfactual, plot_config
+        is_counterfactual,
+        plot_with_circuit_sizes=plot_with_circuit_sizes,
+        plot_config=plot_config,
     )
     iou_agg = _aggregate_iou_recall_for_heatmap(
-        iou_exist, graph_type, "iou", is_counterfactual=is_counterfactual, plot_config=plot_config
+        iou_exist,
+        results_root,
+        model_type,
+        graph_type,
+        "iou",
+        repeat_type,
+        seeds,
+        repeat_types,
+        plot_with_circuit_sizes,
+        is_counterfactual=is_counterfactual,
+        plot_config=plot_config,
     )
     recall_agg = _aggregate_iou_recall_for_heatmap(
-        recall_exist, graph_type, "recall", is_counterfactual=is_counterfactual, plot_config=plot_config
+        recall_exist,
+        results_root,
+        model_type,
+        graph_type,
+        "recall",
+        repeat_type,
+        seeds,
+        repeat_types,
+        plot_with_circuit_sizes,
+        is_counterfactual=is_counterfactual,
+        plot_config=plot_config,
     )
 
     if cross_agg is None or iou_agg is None or recall_agg is None:
         return
 
-    all_labels = set()
+    source_labels = set()
+    target_labels = set()
     for a in (cross_agg, iou_agg, recall_agg):
-        all_labels.update(a["source_label"].unique())
-        all_labels.update(a["target_label"].unique())
-    order = sort_task_names_for_display(list(all_labels), plot_config)
+        source_labels.update(a["source_label"].unique())
+        target_labels.update(a["target_label"].unique())
+    source_order = sort_task_names_for_display(list(source_labels), plot_config)
+    target_order = sort_task_names_for_display(list(target_labels), plot_config)
     for agg in (cross_agg, iou_agg, recall_agg):
-        agg["source_label"] = pd.Categorical(agg["source_label"], categories=order, ordered=True)
-        agg["target_label"] = pd.Categorical(agg["target_label"], categories=order, ordered=True)
+        agg["source_label"] = pd.Categorical(agg["source_label"], categories=source_order, ordered=True)
+        agg["target_label"] = pd.Categorical(agg["target_label"], categories=target_order, ordered=True)
 
     fig = make_subplots(
         rows=1,
@@ -752,10 +1012,24 @@ def _run_combined_one(
     fig.add_trace(h_recall, row=1, col=2)
     fig.add_trace(h_cross, row=1, col=3)
 
-    fig.update_xaxes(tickangle=-15, title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE))
-    fig.update_yaxes(autorange="reversed", title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE))
-    fig.update_yaxes(title_text=None, row=1, col=2)
-    fig.update_yaxes(title_text=None, row=1, col=3)
+    fig.update_xaxes(
+        title_text="Circuit", tickangle=-15, title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE),
+        row=1, col=1,
+    )
+    fig.update_xaxes(
+        title_text="Circuit", tickangle=-15, title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE),
+        row=1, col=2,
+    )
+    fig.update_xaxes(
+        title_text="Dataset", tickangle=-15, title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE),
+        row=1, col=3,
+    )
+    fig.update_yaxes(
+        title_text="Circuit", autorange="reversed", title_font=dict(size=FONT_SIZE), tickfont=dict(size=FONT_SIZE),
+        row=1, col=1,
+    )
+    fig.update_yaxes(title_text=None, autorange="reversed", tickfont=dict(size=FONT_SIZE), row=1, col=2)
+    fig.update_yaxes(title_text=None, autorange="reversed", tickfont=dict(size=FONT_SIZE), row=1, col=3)
 
     # Compute global vmax from all non-NaN z-values across traces
     all_z: list[float] = []

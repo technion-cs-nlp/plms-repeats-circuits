@@ -190,11 +190,18 @@ def sort_task_names_for_display(
     method_order = [METHOD_DISPLAY_NAMES.get(x, x) for x in raw_method_order]
     full_order = list(repeat_order) + [x for x in method_order if x not in repeat_order]
 
-    def key(name: str) -> int:
+    def key(name: str) -> tuple:
+        # Use base label (before newline) for ordering when labels have circuit-size suffix
+        base = name.split("\n")[0].strip() if "\n" in name else name
         try:
-            return full_order.index(name)
+            idx = full_order.index(base)
         except ValueError:
-            return len(full_order)
+            try:
+                idx = full_order.index(name)
+            except ValueError:
+                idx = len(full_order)
+        # Tie-breaker: base label before suffixed (shorter first) for deterministic order
+        return (idx, len(name))
 
     unique = list(set(tasks_names))
     return sorted(unique, key=key)

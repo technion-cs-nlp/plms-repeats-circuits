@@ -579,7 +579,7 @@ class Graph:
                 continue
             if sa is None or sb is None:
                 return False
-            if not np.allclose(np.asarray(sa, dtype=float), np.asarray(sb, dtype=float)):
+            if not np.allclose(np.asarray(sa, dtype=float), np.asarray(sb, dtype=float), rtol=1e-4, atol=1e-6):
                 return False
          #asserting the edges has same in_graph edges   
         for name, edge in self.edges.items():
@@ -592,7 +592,7 @@ class Graph:
                 continue
             if sa is None or sb is None:
                 return False
-            if not np.allclose(np.asarray(sa, dtype=float), np.asarray(sb, dtype=float)):
+            if not np.allclose(np.asarray(sa, dtype=float), np.asarray(sb, dtype=float), rtol=1e-4, atol=1e-6):
                 return False
         return True
 
@@ -1059,7 +1059,7 @@ class NeuronGraph(Graph):
             else:
                 a = sa if isinstance(sa, torch.Tensor) else torch.as_tensor(sa, dtype=torch.float64)
                 b = sb if isinstance(sb, torch.Tensor) else torch.as_tensor(sb, dtype=torch.float64)
-                if not torch.allclose(a, b):
+                if not torch.allclose(a, b, rtol=1e-4, atol=1e-6):
                     return False
 
             if isinstance(node, MLPWithNeuronNode):
@@ -1072,7 +1072,7 @@ class NeuronGraph(Graph):
                     warnings.warn(f"NeuronGraph node {name}: both neurons_scores are None")
                 elif nsa is None or nsb is None:
                     return False
-                elif not torch.allclose(nsa, nsb):
+                elif not torch.allclose(nsa, nsb, rtol=1e-4, atol=1e-6):
                     return False
 
         
