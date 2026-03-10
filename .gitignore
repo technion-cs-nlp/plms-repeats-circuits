@@ -16,3 +16,6 @@ __pycache__/
 .cursor/
 # Experiment results (generated, not committed)
 results/
+
+# Extracted Overleaf zip (source for docs)
+ProteinRepeatsV3_extracted/

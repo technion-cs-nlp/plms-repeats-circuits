@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Induction Meets Biology – Project Page</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,700&display=swap">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+    <style>
+		mark {
+			-webkit-animation: 3s highlight 1.5s 1 normal forwards;
+			animation: 3s highlight 1.5s 1 normal forwards;
+			background-color: none;
+			background: linear-gradient(90deg, #f7f5bc 50%, rgba(255, 255, 255, 0) 50%);
+			background-size: 200% 100%;
+			background-position: 100% 0;
+		}
+		
+		@-webkit-keyframes highlight {
+		  to {
+			background-position: 0 0;
+		  }
+		}
+
+		@keyframes highlight {
+		  to {
+			background-position: 0 0;
+		  }
+		}
+		
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+
+        header {
+            background-color: 	#2d6a4f;
+            color: #fff;
+            padding: 60px 0;
+            text-align: center;
+        }
+		
+		figure {
+		  text-align: center; /* Centers the content inside the figure */
+		  margin: 20px auto; /* Adds vertical space and centers the figure horizontally */
+		}
+		
+		figcaption {
+		  padding-top: 10px;
+		  color: #555;
+		  font-style: italic; /* Styling for the caption */
+		  font-size: smaller;
+		}
+
+        header h1 {
+			margin: 0;
+			font-size: 60px;
+			padding-bottom: 30px;
+			padding-top: 20px;
+			padding-left: 20px;
+			padding-right: 20px;
+        }
+
+        header h2 {
+            margin: 10px 0 0;
+            font-weight: 400;
+        }
+		
+		header address a {
+			font-size: 24px;
+			color: #fff;
+			text-decoration: none;
+		}
+		header address a:hover {
+			text-decoration: underline;
+		}
+		
+		header address {
+			color: #fff;
+		}
+		
+		header address institute {
+			color: #fff;
+			font-size: 16px;
+		}
+		
+		header address sup {
+			color: #fff;
+		}
+
+        .container {
+            width: 60%;
+            margin: 40px auto;
+        }
+		
+        section {
+            margin-bottom: 50px;
+        }
+
+        section h2 {
+            font-size: 28px;
+            border-left: 5px solid #4a9aac;
+            padding-left: 10px;
+            color: #333;
+        }
+
+        section p {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-top: 10px;
+        }
+		
+		.figure-container {
+		  display: grid;
+		  grid-template-columns: 1fr 1fr; /* Creates two columns of equal width */
+		  gap: 20px; /* Space between columns */
+		}
+		
+		.subtitle {
+		    font-size: 28px;
+            border-left: 5px solid #4a9aac;
+            padding-left: 10px;
+            color: #333;
+		}
+
+        .methodology {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+			font-size: 18px;
+        }
+		
+        .methodology h3 {
+            font-size: 24px;
+            color: #444;
+        }
+
+        .methodology ul {
+            margin-left: 0px;
+        }
+
+        .methodology ul li ol {
+            margin-bottom: 10px;
+        }
+
+        footer {
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            padding: 5px 0;
+        }
+
+        footer p {
+            margin: 0;
+            font-size: 16px;
+        }
+		.card {
+			position: relative;
+			display: -webkit-box;
+			display: -webkit-flex;
+			display: -ms-flexbox;
+			display: flex;
+			-webkit-box-orient: vertical;
+			-webkit-box-direction: normal;
+			-webkit-flex-direction: column;
+			-ms-flex-direction: column;
+			flex-direction: column;
+			background-color: #fff;
+			border: 1px solid rgba(0, 0, 0, .125);
+			border-radius: .25rem;
+		.card-header {
+			padding: .75rem 1.25rem;
+			margin-bottom: 0;
+			margin-top: 0;
+			background-color: #f7f7f9;
+			border-bottom: 1px solid rgba(0, 0, 0, .125);
+			}
+		.card-block {
+			-webkit-box-flex: 1;
+			-webkit-flex: 1 1 auto;
+			-ms-flex: 1 1 auto;
+			flex: 1 1 auto;
+			padding: 1.25rem;
+		}
+		.img-inline {
+		  vertical-align: middle;
+		  max-width: 100%;
+		  height: auto;
+		}
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Induction Meets Biology: <br>Mechanisms of Repeat Detection in Protein Language Models</h1>
+	<address>
+	  <nobr><a href="https://www.linkedin.com/in/gal-kesten-271735193" target="_blank">Gal Kesten-Pomeranz</a><sup>1</sup>,</nobr>
+	  <nobr><a href="https://yaniv.nikankin.com/" target="_blank">Yaniv Nikankin</a><sup>1</sup>,</nobr>
+	  <nobr><a href="https://anja.re/" target="_blank">Anja Reusch</a><sup>1</sup>,</nobr>
+	  <nobr><a href="https://scholar.google.com/citations?user=enel280AAAAJ&hl=en" target="_blank">Tomer Tsaban</a><sup>2</sup>,</nobr>
+	  <nobr><a href="https://sites.google.com/mail.huji.ac.il/furman-lab/home" target="_blank">Ora Schueler-Furman</a><sup>2</sup>,</nobr>
+	  <nobr><a href="https://belinkov.com/" target="_blank">Yonatan Belinkov</a><sup>1,3</sup></nobr>
+	 <br>
+	  <nobr><sup>1</sup><institute>Technion – Israel Institute of Technology</institute></nobr>;
+	  <nobr><sup>2</sup><institute>The Hebrew University of Jerusalem</institute></nobr>;
+	  <nobr><sup>3</sup><institute>Kempner Institute, Harvard University</institute></nobr>
+	</address>
+	<a href="https://arxiv.org/abs/2602.23179" target="_blank" class="btn" style="color: #fff; background-color: #198754; border-color: #136e44;"><i class="ai ai-arxiv"></i> ArXiv</a>
+    <a href="https://arxiv.org/pdf/2602.23179v1" target="_blank" class="btn" style="color: #fff; background-color: #dc3545; border-color: #b72d3a;"><i class="far fa-file-pdf"></i> PDF</a>
+    <a href="https://github.com/technion-cs-nlp/plms-repeats-circuits" target="_blank" class="btn" style="color: #fff; background-color: #212529; border-color: #212529;"><i class="fab fa-github"></i> Code</a>
+    <a href="https://huggingface.co/datasets/galkesten/plms_repeats_circuits/tree/main" target="_blank" class="btn" style="color: #fff; background-color: #ffd21e; border-color: #e6be0e; color: #000;"><i class="fas fa-database"></i> Datasets</a>
+</header>
+
+
+<div class="container">
+
+	<h2 class="subtitle">Abstract</h2>
+    <section>
+        <p>
+		Protein sequences are abundant in repeating segments, both as exact copies and as approximate segments with mutations.
+		These repeats are important for protein structure and function, motivating decades of algorithmic work on repeat identification.
+		Recent work has shown that protein language models (PLMs) identify repeats by examining their behavior in masked-token prediction.
+		To elucidate their internal mechanisms, we investigate how PLMs detect both exact and approximate repeats.
+        </p>
+        <p>
+		We find that the mechanism for approximate repeats functionally subsumes that of exact repeats.
+		We then characterize this mechanism, revealing two main stages: PLMs first build feature representations using both general positional attention heads and biologically specialized components, such as neurons that encode amino-acid similarity. Then, induction heads attend to aligned tokens across repeated segments, promoting the correct answer.
+        </p>
+        <p>
+		Our results reveal how PLMs solve this biological task by combining language-based pattern matching with specialized biological knowledge, thereby establishing a basis for studying more complex evolutionary processes in PLMs.
+        </p>
+    </section>
+
+	<h2 class="subtitle">Locating a General Repeat Mechanism</h2>
+    <section class="methodology">
+		<p>
+			<ul>
+				<li>
+					We formulate repeat identification as a masked language modeling task: the model receives a protein sequence containing a segment that appears twice (either identically or with amino-acid substitutions), one token is masked in one repeat occurrence, and the model predicts the masked amino acid using the remaining context, including information from the other repeat occurrence. We analyze ESM-3 and ESM-C.
+				</li>
+				<li>
+					We locate circuits—minimal subsets of attention heads and MLPs that faithfully capture the model's behavior—for three task variants: <b>synthetic</b> (random sequences with two identical copies of a segment), <b>identical</b> (natural proteins with two exact repeat occurrences), and <b>approximate</b> (natural proteins where the two repeats differ by amino-acid substitutions). Using attribution patching with integrated gradients (AP-IG), we identify circuits for each variant.
+				</li>
+				<li>
+					Cross-task comparison reveals that the approximate-repeat circuit generalizes both functionally, achieving high cross-task faithfulness across tasks, and structurally, with high recall indicating that it subsumes most components of the synthetic and identical circuits. Conversely, circuits discovered for synthetic or identical repeats do not fully recover performance when applied to approximate repeats. The approximate-repeat circuit thus appears to capture the broader mechanism employed across all tasks.
+				</li>
+			</ul>
+		</p>
+		<figure>
+			<img src="img/graph_type_nodes_all_metrics_across_repeats.png" alt="Cross-task circuit comparisons" style="max-width: 900px; height: auto;">
+			<figcaption>
+			IoU (left), recall (middle), and cross-task faithfulness (right) for circuits across the three repeat tasks. IoU shows high overlap between all three tasks; recall shows synthetic and identical circuits are largely subsumed within the approximate-repeat circuit; cross-task faithfulness measures how well each circuit performs on other tasks' data—only the approximate repeat circuit generalizes to all settings.
+			</figcaption>
+		</figure>
+    </section>
+	
+
+
+	<h2 class="subtitle">Which model components participate in the approximate repeats identification task?</h2>
+    <section class="methodology">
+		<p>
+			<b>Attention heads.</b> We analyze attention heads in the approximate-repeat circuit. We examine their attention patterns across sample sequences and identify three recurring behaviors: induction-like heads that attend from tokens in one repeat to their aligned counterparts in the other repeat; relative-position heads that attend to fixed positional offsets along the sequence; and amino-acid–biased heads that attend to specific amino acids or groups of amino acids. To rigorously quantify these patterns, we define features for each head—induction score (pattern-matching and copying across aligned repeats), relative position (consistent attention at fixed offsets), amino acid bias (selectivity for specific amino acids), repeat focus score (sharper attention to repeat regions), attention sharpness (attention distribution concentration), boundary attention (attention to BOS/EOS tokens), head contribution (contribution to the final prediction)—and cluster heads based on these features. The resulting clusters align with the three manually identified pattern types. Relative-position heads span all layers, while induction heads and amino-acid–biased (AA-biased) heads are concentrated in middle and later layers.
+		</p>
+		<figure>
+			<img src="img/attention2_cropped.png" alt="Active attention patterns in ESM-3" style="max-width: 400px; height: auto;">
+			<figcaption>
+				(a–c) Example attention maps from three attention heads in the approximate-repeat circuit, for a single representative input: <span style="color: #228b22;">(a)</span> fixed relative-position attention (diagonal); <span style="color: #e67e22;">(b)</span> induction attention between aligned repeat positions (two partial diagonals); and <span style="color: #2980b9;">(c)</span> amino-acid–biased attention (vertical). (d) Visualization of clustering results using UMAP.
+			</figcaption>
+		</figure>
+		<p>
+			<b>MLP neurons.</b> To locate important neurons, we rank neurons within each MLP layer in the approximate-repeat circuit using AP-IG at the neuron level, and retain the top fraction per layer. Retaining roughly 3% of neurons per layer suffices to recover most circuit faithfulness in ESM-3; ESM-C requires roughly 7%.
+		</p>
+		<p>
+			As an initial exploratory step, we visualize the activation patterns of high-scoring neurons. Observing these activations reveals several recurring patterns: some neurons exhibit a bias toward specific amino acids; others activate on subsets of amino acids that share similar biochemical properties or exhibit high evolutionary substitution likelihood according to BLOSUM62; and some activate more strongly within repeated segments.
+		</p>
+		<figure>
+			<img src="img/neuron_patterns_cropped.png" alt="Examples of task-relevant neurons in ESM-3" style="max-width: 600px; height: auto;">
+			<figcaption>
+				Token-level activations on an example sequence for three neuron types: an amino-acid–specific neuron, a neuron that responds to substitutable
+				amino acids according to BLOSUM62 groupings, and a repeat-focused neuron.
+			</figcaption>
+		</figure>
+		<p>
+			To quantify these patterns, we define concepts as groups of tokens sharing a property—for example, repeat-region tokens, individual amino acids, or biochemical concepts such as BLOSUM62 substitution groups and IMGT physicochemical classes of the 20 common amino acids. For each neuron, we measure how well its activations discriminate concept tokens from non-concept tokens using AUROC, and assign it to the concept with the highest AUROC. Across all layers, neurons are most frequently matched with singleton amino-acid concepts, followed by BLOSUM62 groups and other concepts based on biochemical similarity. In mid-to-late layers, a substantial fraction of neurons are matched with the repeat-region concept.
+		</p>
+		<figure>
+			<img src="img/auroc_across_layers_and_neuron_types.png" alt="AUROC scores for neuron concepts" style="max-width: 700px; height: auto;">
+			<figcaption>
+				AUROC scores for each neuron's best-matching concept across layers. Each point is a neuron; color indicates concept category. "Biological (Other)" denotes IMGT physicochemical classes and secondary-structure propensities. In early–mid layers, neurons mainly match with singleton amino-acid and biochemical concepts; in mid–late layers, neurons increasingly match with the repeat-region concept—aligning with the layer range where induction heads concentrate.
+			</figcaption>
+		</figure>
+	</section>
+
+
+	<h2 class="subtitle">How do the components interact to solve the task of repeat identification and prediction?</h2>
+    <section class="methodology">
+		<p>
+			Having characterized the main component groups—induction heads, relative-position heads, AA-biased heads, and MLP neuron groups—we now explain how they interact to produce the correct prediction. We apply EAP-IG to quantify mutual influence between component groups, and use the logit lens to measure each group's direct contribution to the prediction at the masked position across layers.
+		</p>
+		<p>
+			Taken together, these analyses suggest a plausible computational path for repeat detection. First, relative-position heads and MLPs—primarily biochemical similarity neurons and amino acid neurons—build contextual representations that align tokens across the two repeats. Second, induction heads exploit these representations by attending from the masked position to its aligned token and copy the corresponding residue, thereby increasing the probability of the correct token. In these layers, repeat-related neurons play an inhibitory role. Finally, late MLPs driven mainly by amino acid and repetition neurons shape the output distribution, while AA-biased heads have a weaker direct contribution to the logits.
+		</p>
+		<figure>
+			<img src="img/Overview_stages.png" alt="Visualization of the repeat identification mechanism" style="max-width: 100%; height: auto;">
+			<figcaption>
+				(I) Relative-position heads and biochemical neurons build contextual representations that align tokens across repeats. (II) Induction heads attend from the masked position to its aligned token and copy its information, enabling retrieval of the correct amino acid; repeat neurons play an inhibitory role. (III) MLP neurons refine the final masked token distribution, with amino-acid–biased attention heads also contributing to the prediction.
+			</figcaption>
+		</figure>
+	</section>
+
+
+
+	<h2 class="subtitle">How to cite</h2>
+
+	<div class="card">
+	<h3 class="card-header">bibliography</h3>
+	<div class="card-block">
+	<pre class="card-text clickselect" style="margin: 0; border: none; background: transparent; font-family: inherit; white-space: pre-wrap;">
+	Gal Kesten-Pomeranz, Yaniv Nikankin, Anja Reusch, Tomer Tsaban, Ora Schueler-Furman, Yonatan Belinkov. “Induction Meets Biology: Mechanisms of Repeat Detection in Protein Language Models”.
+	</pre>
+	</div>
+	<h3 class="card-header">bibtex</h3>
+	<div class="card-block">
+	<pre class="card-text clickselect">
+	@misc{kestenpomeranz2026inductionmeetsbiologymechanisms,
+	  title={Induction Meets Biology: Mechanisms of Repeat Detection in Protein Language Models},
+	  author={Gal Kesten-Pomeranz and Yaniv Nikankin and Anja Reusch and Tomer Tsaban and Ora Schueler-Furman and Yonatan Belinkov},
+	  year={2026},
+	  eprint={2602.23179},
+	  archivePrefix={arXiv},
+	  primaryClass={cs.LG},
+	  url={https://arxiv.org/abs/2602.23179},
+	}
+	</pre>
+	</div>
+	</div>
+	<p></p>
+
+
+<footer>
+    <p>Forked from a template by Hadas Orgad | Technion | 2024</p>
+</footer>
+
+</body>
+</html>
