@@ -1,6 +1,6 @@
 # Induction Meets Biology: Mechanisms of Repeat Detection in Protein Language Models
 
-[Paper on arXiv](https://arxiv.org/abs/2602.23179v1) | [Dataset on HuggingFace](https://huggingface.co/datasets/galkesten/plms_repeats_circuits/tree/main)
+[Project Website](https://technion-cs-nlp.github.io/plms-repeats-circuits/) | [Paper on arXiv](https://arxiv.org/abs/2602.23179v1) | [Dataset on HuggingFace](https://huggingface.co/datasets/galkesten/plms_repeats_circuits/tree/main)
 
 
 ## Repo structure
