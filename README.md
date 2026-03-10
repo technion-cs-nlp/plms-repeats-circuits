@@ -30,7 +30,7 @@ The `plms_repeats_circuits` package contains code for **attribution patching** a
 
 ## Set up the environment
 
-This project uses [Poetry](https://python-poetry.org/) for dependency management. See the [official installation instructions](https://python-poetry.org/docs/installation/).
+This project uses [Poetry](https://python-poetry.org/) for dependency management. See the [official documentation](https://python-poetry.org/docs/).
 
 **Clone the repo and init submodule:**
 
