@@ -97,6 +97,10 @@
             width: 60%;
             margin: 40px auto;
         }
+        @media (max-width: 768px) {
+            .container { width: 100%; padding: 0 16px; box-sizing: border-box; }
+            header h1 { font-size: 1.8rem; }
+        }
 		
         section {
             margin-bottom: 50px;
@@ -253,7 +257,7 @@
 			</ul>
 		</p>
 		<figure>
-			<img src="img/graph_type_nodes_all_metrics_across_repeats.png" alt="Cross-task circuit comparisons" style="max-width: 900px; height: auto;">
+			<img src="img/graph_type_nodes_all_metrics_across_repeats.png" alt="Cross-task circuit comparisons" style="max-width: 75%; height: auto;">
 			<figcaption>
 			IoU (left), recall (middle), and cross-task faithfulness (right) for circuits across the three repeat tasks. IoU shows high overlap between all three tasks; recall shows synthetic and identical circuits are largely subsumed within the approximate-repeat circuit; cross-task faithfulness measures how well each circuit performs on other tasks' data—only the approximate repeat circuit generalizes to all settings.
 			</figcaption>
@@ -268,7 +272,7 @@
 			<b>Attention heads.</b> We analyze attention heads in the approximate-repeat circuit. We examine their attention patterns across sample sequences and identify three recurring behaviors: induction-like heads that attend from tokens in one repeat to their aligned counterparts in the other repeat; relative-position heads that attend to fixed positional offsets along the sequence; and amino-acid–biased heads that attend to specific amino acids or groups of amino acids. To rigorously quantify these patterns, we define features for each head—induction score (pattern-matching and copying across aligned repeats), relative position (consistent attention at fixed offsets), amino acid bias (selectivity for specific amino acids), repeat focus score (sharper attention to repeat regions), attention sharpness (attention distribution concentration), boundary attention (attention to BOS/EOS tokens), head contribution (contribution to the final prediction)—and cluster heads based on these features. The resulting clusters align with the three manually identified pattern types. Relative-position heads span all layers, while induction heads and amino-acid–biased (AA-biased) heads are concentrated in middle and later layers.
 		</p>
 		<figure>
-			<img src="img/attention2_cropped.png" alt="Active attention patterns in ESM-3" style="max-width: 400px; height: auto;">
+			<img src="img/attention2_cropped.png" alt="Active attention patterns in ESM-3" style="max-width: 40%; height: auto;">
 			<figcaption>
 				(a–c) Example attention maps from three attention heads in the approximate-repeat circuit, for a single representative input: <span style="color: #228b22;">(a)</span> fixed relative-position attention (diagonal); <span style="color: #e67e22;">(b)</span> induction attention between aligned repeat positions (two partial diagonals); and <span style="color: #2980b9;">(c)</span> amino-acid–biased attention (vertical). (d) Visualization of clustering results using UMAP.
 			</figcaption>
@@ -280,7 +284,7 @@
 			As an initial exploratory step, we visualize the activation patterns of high-scoring neurons. Observing these activations reveals several recurring patterns: some neurons exhibit a bias toward specific amino acids; others activate on subsets of amino acids that share similar biochemical properties or exhibit high evolutionary substitution likelihood according to BLOSUM62; and some activate more strongly within repeated segments.
 		</p>
 		<figure>
-			<img src="img/neuron_patterns_cropped.png" alt="Examples of task-relevant neurons in ESM-3" style="max-width: 600px; height: auto;">
+			<img src="img/neuron_patterns_cropped.png" alt="Examples of task-relevant neurons in ESM-3" style="max-width: 50%; height: auto;">
 			<figcaption>
 				Token-level activations on an example sequence for three neuron types: an amino-acid–specific neuron, a neuron that responds to substitutable
 				amino acids according to BLOSUM62 groupings, and a repeat-focused neuron.
@@ -290,7 +294,7 @@
 			To quantify these patterns, we define concepts as groups of tokens sharing a property—for example, repeat-region tokens, individual amino acids, or biochemical concepts such as BLOSUM62 substitution groups and IMGT physicochemical classes of the 20 common amino acids. For each neuron, we measure how well its activations discriminate concept tokens from non-concept tokens using AUROC, and assign it to the concept with the highest AUROC. Across all layers, neurons are most frequently matched with singleton amino-acid concepts, followed by BLOSUM62 groups and other concepts based on biochemical similarity. In mid-to-late layers, a substantial fraction of neurons are matched with the repeat-region concept.
 		</p>
 		<figure>
-			<img src="img/auroc_across_layers_and_neuron_types.png" alt="AUROC scores for neuron concepts" style="max-width: 700px; height: auto;">
+			<img src="img/auroc_across_layers_and_neuron_types.png" alt="AUROC scores for neuron concepts" style="max-width: 50%; height: auto;">
 			<figcaption>
 				AUROC scores for each neuron's best-matching concept across layers. Each point is a neuron; color indicates concept category. "Biological (Other)" denotes IMGT physicochemical classes and secondary-structure propensities. In early–mid layers, neurons mainly match with singleton amino-acid and biochemical concepts; in mid–late layers, neurons increasingly match with the repeat-region concept—aligning with the layer range where induction heads concentrate.
 			</figcaption>
@@ -307,7 +311,7 @@
 			Taken together, these analyses suggest a plausible computational path for repeat detection. First, relative-position heads and MLPs—primarily biochemical similarity neurons and amino acid neurons—build contextual representations that align tokens across the two repeats. Second, induction heads exploit these representations by attending from the masked position to its aligned token and copy the corresponding residue, thereby increasing the probability of the correct token. In these layers, repeat-related neurons play an inhibitory role. Finally, late MLPs driven mainly by amino acid and repetition neurons shape the output distribution, while AA-biased heads have a weaker direct contribution to the logits.
 		</p>
 		<figure>
-			<img src="img/Overview_stages.png" alt="Visualization of the repeat identification mechanism" style="max-width: 100%; height: auto;">
+			<img src="img/Overview_stages.png" alt="Visualization of the repeat identification mechanism" style="max-width: 75%; height: auto;">
 			<figcaption>
 				(I) Relative-position heads and biochemical neurons build contextual representations that align tokens across repeats. (II) Induction heads attend from the masked position to its aligned token and copy its information, enabling retrieval of the correct amino acid; repeat neurons play an inhibitory role. (III) MLP neurons refine the final masked token distribution, with amino-acid–biased attention heads also contributing to the prediction.
 			</figcaption>
