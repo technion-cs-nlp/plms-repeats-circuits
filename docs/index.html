@@ -349,6 +349,72 @@
 	<p></p>
 
 
+	<h2 class="subtitle">Appendix: Additional Neuron Examples</h2>
+	<section class="methodology">
+		<h3>Aligned Repeat Token to Mask Position</h3>
+		<figure>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m38_n2850_examples_UniRef50_A0A0P7XBW1_A0A0P7XBW1_9BACT_PFFMSAAR.png" alt="Aligned repeat token neuron example 1" style="max-width: 80%; height: auto;">
+			<p style="margin-top: 0.5em;"></p>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m38_n2850_examples_UniRef50_B0DTM3_B0DTM3_LACBS_DSIQYLRIPRTSSTKL.png" alt="Aligned repeat token neuron example 2" style="max-width: 80%; height: auto;">
+			<figcaption>Example sequence visualizations for a neuron in ESM-3 (layer 38, neuron 2850) selective for the aligned repeat token to the masked position. The neuron activates on the token aligned with the mask (denoted by "?"), corresponding to the correct retrieval target. Repeat tokens are highlighted in green. UniProt accessions: A0A0P7XBW1 (top), B0DTM3 (bottom).</figcaption>
+		</figure>
+
+		<h3>Repeat Tokens</h3>
+		<figure>
+			<img src="img/appendix/neurons_esmc_sequence_visualization_m20_n2224_examples_UniRef50_A0A8X6HTE9_A0A8X6HTE9_TRICU_TRKGELSR.png" alt="Repeat tokens neuron" style="max-width: 80%; height: auto;">
+			<figcaption>Example sequence visualization for a repeat-selective neuron in ESM-C (layer 24, neuron 2224). The neuron exhibits positive activations (red) at positions corresponding to approximate repeat tokens, highlighted in green. UniProt accession: A0A8X6HTE9.</figcaption>
+		</figure>
+
+		<h3>Helix Breakers</h3>
+		<figure>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m2_n3282.png" alt="Helix breaker neuron visualization" style="max-width: 80%; height: auto;">
+			<figcaption>Example sequence visualization for a helix-breaker–selective neuron in ESM-3 (layer 2, neuron 3282). The neuron exhibits strong positive activations (red) on proline (P) and glycine (G), amino acids known to disrupt α-helical secondary structure. UniProt accession: B0DTM3.</figcaption>
+		</figure>
+
+		<h3>Aromatic Ring</h3>
+		<figure>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m35_n3011_examples_UniRef50_A0A0P7XBW1_A0A0P7XBW1_9BACT_PFFMSAAR.png" alt="Aromatic ring neuron" style="max-width: 80%; height: auto;">
+			<figcaption>Example sequence visualization for an aromatic-ring–selective neuron in ESM-3 (layer 35, neuron 3011). The neuron exhibits strong positive activations (red) on aromatic amino acids (F, Y, H, W). UniProt accession: A0A0P7XBW1.</figcaption>
+		</figure>
+
+		<h3>Hydrogen Donor</h3>
+		<figure>
+			<img src="img/appendix/neurons_esmc_sequence_visualization_m7_n907_examples_MVKIWGREDGLIDRLSFFNTFDSSLRLVLYLSTIFFTVHRKFPLLKF.png" alt="Hydrogen donor neuron" style="max-width: 80%; height: auto;">
+			<figcaption>Example sequence visualization for a neuron in ESM-C (layer 7, neuron 907) that is selective for the IMGT hydrogen-bond donor residue class. The neuron exhibits strong positive activations (red) on R, K, and W, consistent with their classification as side-chain hydrogen-bond donors in IMGT. UniProt accession: A0A2M8A3Y9.</figcaption>
+		</figure>
+
+		<h3>Bidirectional Amino-Acid Neurons</h3>
+		<figure>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m8_n788_examples_UniRef50_B0DTM3_B0DTM3_LACBS_DSIQYLRIPRTSSTKLFTKQSTSH.png" alt="Bidirectional amino-acid neuron ESM-3" style="max-width: 80%; height: auto;">
+			<figcaption>ESM-3 (layer 8, neuron 788), exhibiting positive activations (red) on amino acid F and negative activations (blue) on amino acid Y. Notably, F and Y are biochemically similar aromatic residues with a high BLOSUM62 substitution score. UniProt accession: B0DTM3.</figcaption>
+		</figure>
+		<figure>
+			<img src="img/appendix/neurons_esmc_sequence_visualization_m0_n2105_examples_UniRef50_A0A2K3L8W6_A0A2K3L8W6_TRIPR_MTQAGVSRI.png" alt="Bidirectional amino-acid neuron ESM-C" style="max-width: 80%; height: auto;">
+			<figcaption>ESM-C (layer 0, neuron 2105), exhibiting negative activations (blue) on amino acid S and positive activations (red) on amino acid T. Notably, S and T are often considered biochemically similar due to their hydroxyl side chains and have a high BLOSUM62 substitution score. UniProt accession: A0A2K3L8W6.</figcaption>
+		</figure>
+
+		<h3>BLOSUM62</h3>
+		<figure>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m19_n3434_examples_UniRef50_A0A1W9X075_A0A1W9X075_9BACT_VGSIDNIR.png" alt="BLOSUM62 neuron ESM-3" style="max-width: 80%; height: auto;">
+			<figcaption>ESM-3 (layer 19, neuron 3434), exhibiting positive activations (red) on amino acids D, E, and N. D, E, and N are mutually substitutable according to the BLOSUM62 matrix. UniProt accession: A0A1W9X075.</figcaption>
+		</figure>
+		<figure>
+			<img src="img/appendix/neurons_esmc_sequence_visualization_m0_n2615_examples_UniRef50_A0A2K3L8W6_A0A2K3L8W6_TRIPR_MTQAGVSRI.png" alt="BLOSUM62 neuron ESM-C" style="max-width: 80%; height: auto;">
+			<figcaption>ESM-C (layer 0, neuron 2615), exhibiting negative activations (blue) on amino acids D, E, and N. D, E, and N are mutually substitutable according to the BLOSUM62 matrix. UniProt accession: A0A2K3L8W6.</figcaption>
+		</figure>
+
+		<h3>Special Tokens</h3>
+		<figure>
+			<img src="img/appendix/neurons_esm3_sequence_visualization_m0_n125_examples_UniRef50_A0A0P7XBW1_A0A0P7XBW1_9BACT_PFFMSAARSE.png" alt="Special tokens neuron ESM-3" style="max-width: 80%; height: auto;">
+			<figcaption>ESM-3 (layer 0, neuron 125), exhibiting strong negative activations (blue) on the BOS token. Regular amino-acid tokens show positive activations (red), while the EOS token exhibits moderately negative activation. UniProt accession: A0A0P7XBW1.</figcaption>
+		</figure>
+		<figure>
+			<img src="img/appendix/neurons_esmc_sequence_visualization_m24_n2127_examples_MVKIWGREDGLIDRLSFFNTFDSSLRLVLYLSTIFFTVHRKFPLL.png" alt="Special tokens neuron ESM-C" style="max-width: 80%; height: auto;">
+			<figcaption>ESM-C (layer 24, neuron 2127), selectively activating on the BOS token with strong negative activation (blue). The EOS token also exhibits moderately negative activation. UniProt accession: A0A2M8A3Y9.</figcaption>
+		</figure>
+	</section>
+
+
 <footer>
     <p>Forked from a template by Hadas Orgad | Technion | 2024</p>
 </footer>
