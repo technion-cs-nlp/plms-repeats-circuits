@@ -58,6 +58,33 @@ def select_circuit_edges(
     _log_info(log, "Exiting select_circuit_edges")
 
 
+def set_edges_in_graph_except_names(
+    graph: Graph,
+    edge_names_to_exclude: set,
+    *,
+    log: Optional[logging.Logger] = None,
+) -> None:
+    """Set in_graph from a set of edge names to exclude: those edges are not in graph; all others are.
+    Then prune dead nodes. No frame/cluster logic — caller builds the exclusion set.
+    graph.edges is keyed by edge name (edge.name)."""
+    _log_info(log, "Entering set_edges_in_graph_except_names")
+    _log_info(log, f"Edges to exclude (set size): {len(edge_names_to_exclude)}")
+    graph.set_all_edges_in_graph(in_graph=True)
+    for name in edge_names_to_exclude:
+        if name in graph.edges:
+            graph.edges[name].in_graph = False
+    nodes_before_prune = graph.count_included_nodes()
+    _log_info(log, "Pruning dead nodes after setting edges.")
+    graph.prune_dead_nodes()
+    nodes_after_prune = graph.count_included_nodes()
+    _log_info(log, f"Nodes before prune: {nodes_before_prune}, nodes after prune: {nodes_after_prune}")
+    n_in_graph = graph.count_included_edges()
+    n_total = graph.count_total_edges()
+    n_not_in_graph = n_total - n_in_graph
+    _log_info(log, f"Edges in graph: {n_in_graph}, edges not in graph: {n_not_in_graph} (total: {n_total})")
+    _log_info(log, "Exiting set_edges_in_graph_except_names")
+
+
 def select_circuit_nodes(
     graph: Graph,
     selection_method: str,

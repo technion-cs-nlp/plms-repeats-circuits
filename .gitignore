@@ -19,3 +19,6 @@ results/
 
 # Extracted Overleaf zip (source for docs)
 ProteinRepeatsV3_extracted/
+
+# Slurm sbatch (local / cluster-specific)
+scripts/interactions_graph_experiment/run_activation_patching_ablation_sbatch.sh

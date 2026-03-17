@@ -41,14 +41,40 @@ def log_prob(logits: torch.Tensor, clean_logits: torch.Tensor, masked_positions:
         results = results.mean()
     return results
 
+
+def probability(logits: torch.Tensor, clean_logits: torch.Tensor, masked_positions: torch.Tensor, labels: torch.Tensor, mean=True, loss=False):
+    masked_clean_logits = get_masked_token_logits(logits, masked_positions)
+    if masked_clean_logits.dim() != 2:
+        raise ValueError(
+            f"Expected masked_clean_logits to have shape (batch_size, hidden_dim), but got {masked_clean_logits.shape}"
+        )
+    if labels.dim() == 1:
+        labels = labels.unsqueeze(-1)
+    if labels.dim() != 2 or labels.size(1) != 1 or labels.size(0) != masked_clean_logits.size(0):
+        raise ValueError(f"Expected labels to have shape (batch_size, 1), but got {labels.shape}")
+    probs = torch.softmax(masked_clean_logits, dim=-1)
+    results = torch.gather(probs, -1, labels.to(probs.device))
+    if results.dim() != 2 or results.size(1) != 1 or results.size(0) != masked_clean_logits.size(0):
+        raise ValueError(f"Expected results to have shape (batch_size, 1), but got {results.shape}")
+    results = results.squeeze(-1)
+    if loss:
+        results = -results
+    if mean:
+        return results.mean()
+    return results
+
+
 def create_loss_and_metric(metric_name):
     if metric_name == "logit_diff":
         loss=partial(logit_diff, loss=True, mean=True)
         metric=partial(logit_diff, loss=False, mean=False)
         return loss, metric
-    if metric_name =="log_prob":
-        loss=partial(log_prob, loss=True, mean=True)
-        metric=partial(log_prob, loss=False, mean=False)
+    if metric_name == "log_prob":
+        loss = partial(log_prob, loss=True, mean=True)
+        metric = partial(log_prob, loss=False, mean=False)
         return loss, metric
-    else: 
-        raise ValueError("Metric name Not Supported")
+    if metric_name == "probability":
+        loss = partial(probability, loss=True, mean=True)
+        metric = partial(probability, loss=False, mean=False)
+        return loss, metric
+    raise ValueError("Metric name Not Supported")
