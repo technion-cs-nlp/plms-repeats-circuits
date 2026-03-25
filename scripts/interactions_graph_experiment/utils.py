@@ -222,13 +222,16 @@ def load_edges_and_aggregate(
     return list(aggregated.values())
 
 
-def cluster_edges_signed(edges_df: pd.DataFrame) -> pd.DataFrame:
-    """Add score_sign per edge, then aggregate by cluster1, cluster2, score_sign."""
+def cluster_edges_signed(edges_df: pd.DataFrame, aggregation: str = "mean") -> pd.DataFrame:
+    """Add score_sign per edge, then aggregate by cluster1, cluster2, score_sign.
+    aggregation: 'mean' or 'sum' for mean_raw values."""
+    if aggregation not in ("mean", "sum"):
+        raise ValueError(f"aggregation must be 'mean' or 'sum', got {aggregation!r}")
     edges_df = edges_df.copy()
     edges_df["score_sign"] = np.where(edges_df["mean_raw"] >= 0, "positive", "negative")
     result = (
         edges_df.groupby(["cluster1", "cluster2", "score_sign"], dropna=False)
-        .agg(n_edges=("name", "count"), mean_raw=("mean_raw", "mean"))
+        .agg(n_edges=("name", "count"), mean_raw=("mean_raw", aggregation))
         .reset_index()
     )
     return result

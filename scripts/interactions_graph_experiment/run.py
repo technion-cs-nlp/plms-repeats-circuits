@@ -29,7 +29,7 @@ from utils import (
 )
 
 
-def _plot_signed_heatmaps(cluster_edges_df: pd.DataFrame, output_dir: Path) -> None:
+def _plot_signed_heatmaps(cluster_edges_df: pd.DataFrame, output_dir: Path, aggregation: str) -> None:
     to_save = cluster_edges_df[["cluster1", "cluster2", "score_sign", "n_edges", "mean_raw"]].copy()
     to_save["mean_raw_scaled"] = to_save["mean_raw"] * 1000
 
@@ -49,6 +49,8 @@ def _plot_signed_heatmaps(cluster_edges_df: pd.DataFrame, output_dir: Path) -> N
         (row.src_label, row.dst_label): row.mean_raw_scaled for row in neg.itertuples(index=False)
     }
 
+    suffix = f"_{aggregation}"
+    path = output_dir
     # positive
     fig_pos = plot_connection_heatmap_from_dict(
         src_to_dst_edge_pos_weights,
@@ -57,9 +59,8 @@ def _plot_signed_heatmaps(cluster_edges_df: pd.DataFrame, output_dir: Path) -> N
         colorscale="Blues",
         take_abs=False,
     )
-    path = output_dir
-    fig_pos.write_image(str(path / "interactions_map.pdf"))
-    fig_pos.write_image(str(path / "interactions_map.png"))
+    fig_pos.write_image(str(path / f"interactions_map{suffix}.pdf"))
+    fig_pos.write_image(str(path / f"interactions_map{suffix}.png"))
 
     # negative
     fig_neg = plot_connection_heatmap_from_dict(
@@ -69,8 +70,8 @@ def _plot_signed_heatmaps(cluster_edges_df: pd.DataFrame, output_dir: Path) -> N
         colorscale="Reds",
         take_abs=True,
     )
-    fig_neg.write_image(str(path / "interactions_map_neg.pdf"))
-    fig_neg.write_image(str(path / "interactions_map_neg.png"))
+    fig_neg.write_image(str(path / f"interactions_map_neg{suffix}.pdf"))
+    fig_neg.write_image(str(path / f"interactions_map_neg{suffix}.png"))
 
 
 def _run_for_model(
@@ -80,6 +81,7 @@ def _run_for_model(
     counterfactual_type: str,
     seeds: list[int],
     in_graph_ratio: float,
+    aggregation: str = "mean",
 ) -> None:
     """Run interactions graph for a single model type."""
     clustering_path = results_root / "attention_heads_clustering" / model_type / counterfactual_type / "clustering_results.csv"
@@ -110,9 +112,9 @@ def _run_for_model(
         return
     after_filter_count = len(edges_df)
     print(f"[{model_type}] Filtered {before_filter_count - after_filter_count} edges out of {before_filter_count}")
-    cluster_edges_df = cluster_edges_signed(edges_df)
-    cluster_edges_df.to_csv(output_dir / "cluster_edges_signed.csv", index=False)
-    _plot_signed_heatmaps(cluster_edges_df, output_dir)
+    cluster_edges_df = cluster_edges_signed(edges_df, aggregation=aggregation)
+    cluster_edges_df.to_csv(output_dir / f"cluster_edges_signed_{aggregation}.csv", index=False)
+    _plot_signed_heatmaps(cluster_edges_df, output_dir, aggregation)
     print(f"[{model_type}] Output saved to {output_dir}")
 
 
@@ -131,6 +133,13 @@ def main() -> None:
     parser.add_argument("--results_root", type=Path, default=REPO_ROOT / "results")
     parser.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44, 45, 46])
     parser.add_argument("--in_graph_ratio", type=float, default=0.8, help="Min ratio of seeds where edge must be in_graph (default: 0.8)")
+    parser.add_argument(
+        "--aggregation",
+        type=str,
+        choices=["mean", "sum"],
+        default="mean",
+        help="Aggregate edge scores by mean (default) or sum per (cluster1, cluster2, score_sign).",
+    )
     args = parser.parse_args()
 
     results_root = args.results_root.resolve()
@@ -143,6 +152,7 @@ def main() -> None:
             counterfactual_type=args.counterfactual_type,
             seeds=args.seeds,
             in_graph_ratio=args.in_graph_ratio,
+            aggregation=args.aggregation,
         )
 
 
