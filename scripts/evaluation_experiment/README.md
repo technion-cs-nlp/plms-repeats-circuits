@@ -10,7 +10,7 @@ This experiment evaluates language models (ESM3, ESM-C) on masked-token predicti
 
 3) **filter.py** — This script creates filtered datasets based on successful instances per model that are used in counterfactuals—meaning we take only proteins where each model had high accuracy on the repeat prediction task (e.g. accuracy ≥ 1.0 for synthetic/identical, or accuracy_identical ≥ 0.8 for approximate). For approximate repeats we also save which positions are identical in both repeat instances, predicted correctly by the model, and near a substitution, so we can later choose one position at random. The output goes to `datasets/{repeat_type}/{model}/counterfactuals/`.
 
-4) **analyze_failures.py** — Enriches per-position `predictions.csv` with evaluation-dataset metadata and computes per-repeat success rates plus lists of success/failure positions per task. Also produces plots of average success rate as a function of repeat length and identity percentage (heatmaps) and repeat-length-binned accuracy plots.
+4) **analyze_failures.py** — **Approximate repeats only.** Builds accuracy/probability heatmaps for **Sub-Adjacent** and **Indel-Adjacent** (all eligible positions; binned by repeat length and identity %). Does not use synthetic, identical, or baseline.
 
 5) **run.py** — The main entry point. Use this script; do not call evaluate.py, filter.py, analyze.py, or analyze_failures.py directly.
 
@@ -37,7 +37,7 @@ This experiment evaluates language models (ESM3, ESM-C) on masked-token predicti
 | evaluate | `{results_root}/evaluation/{model_type}/synthetic/predictions.csv`, `identical/predictions.csv`, `approximate/predictions.csv`, `baseline/baseline_predictions.csv` |
 | filter | `{datasets_root}/{repeat_type}/{model_type}/counterfactuals/` (e.g. `synthetic_eval_filtered.csv`, `approximate_eval_filtered_near_sub.csv`) |
 | analyze | `{results_root}/evaluation/{model_type}/analysis/tasks_performance.csv` |
-| analyze_failures | `{results_root}/evaluation/{model_type}/analysis/failures/` |
+| analyze_failures | `{results_root}/evaluation/{model_type}/analysis/failures/accuracy_prob_heatmaps_approximate_sub_adjacent_all_eligible.{png,pdf}`, `..._indel_adjacent_all_eligible.{png,pdf}` |
 
 **Parameters:**
 
@@ -50,7 +50,7 @@ This experiment evaluates language models (ESM3, ESM-C) on masked-token predicti
 | `--results_root` | Root folder for predictions and analysis | `{repo}/results` |
 | `--batch_size` | Batch size for evaluate step | `16` |
 
-**Note:** If you include `analyze` in `--steps`, you must include all four datasets in `--datasets` (analyze needs all of them).
+**Note:** If you include `analyze` in `--steps`, you must include all four datasets in `--datasets` (analyze needs all of them). `analyze_failures` always runs on **approximate only** (`approximate_repeats_eval.csv` + `approximate/predictions.csv`); `--datasets` is ignored for that step.
 
 **Examples:**
 
@@ -67,7 +67,7 @@ python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate
 # Evaluate and filter, skip analyze
 python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate filter
 
-# Failure analysis only (requires predictions already exist)
+# Approximate failure-analysis heatmaps only (needs approximate/predictions.csv from evaluate)
 python scripts/evaluation_experiment/run.py --model_type esm3 --steps analyze_failures
 
 # Evaluate only synthetic and identical

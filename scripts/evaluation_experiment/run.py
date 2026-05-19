@@ -81,6 +81,18 @@ def verify_analyze_inputs(results_root, model_type):
         sys.exit(1)
 
 
+def verify_analyze_failures_inputs(datasets_root, results_root, model_type):
+    """Verify approximate dataset and predictions exist (analyze_failures is approximate-only)."""
+    pred = results_dir(results_root, model_type, "approximate") / "predictions.csv"
+    eval_csv = dataset_path(datasets_root, "approximate")
+    missing = [str(p) for p in (eval_csv, pred) if not p.exists()]
+    if missing:
+        print("Missing inputs for analyze_failures (approximate only):", flush=True)
+        for p in missing:
+            print(f"  - {p}", flush=True)
+        sys.exit(1)
+
+
 def dataset_path(datasets_root, name):
     return datasets_root / DATASET_FILES[name]
 
@@ -202,26 +214,19 @@ def run_analyze(datasets_root, results_root, model_type):
 
 
 def run_analyze_failures(datasets_root, results_root, model_type):
-    verify_analyze_inputs(results_root, model_type)
+    """Heatmaps for approximate Sub-Adjacent / Indel-Adjacent only; ignores --datasets."""
+    verify_analyze_failures_inputs(datasets_root, results_root, model_type)
 
     res = results_dir(results_root, model_type)
     out = res / "analysis" / "failures"
     out.mkdir(parents=True, exist_ok=True)
 
-    required = {
-        "approximate_all": res / "approximate" / "predictions.csv",
-        "identical_all": res / "identical" / "predictions.csv",
-        "synthetic_all": res / "synthetic" / "predictions.csv",
-    }
+    pred_path = res / "approximate" / "predictions.csv"
 
     print(f"[analyze_failures] -> {out}", flush=True)
     analyze_failures_module.main([
-        "--synthetic_source", str(dataset_path(datasets_root, "synthetic")),
-        "--synthetic_all", str(required["synthetic_all"]),
-        "--identical_source", str(dataset_path(datasets_root, "identical")),
-        "--identical_all", str(required["identical_all"]),
-        "--approximate_source", str(dataset_path(datasets_root, "approximate")),
-        "--approximate_all", str(required["approximate_all"]),
+        "--eval_dataset", str(dataset_path(datasets_root, "approximate")),
+        "--predictions", str(pred_path),
         "--output_dir", str(out),
     ])
 
@@ -268,12 +273,7 @@ def main():
         run_analyze(datasets_root, results_root, args.model_type)
 
     if "analyze_failures" in args.steps:
-        print("=== Step: analyze_failures ===", flush=True)
-        required_for_analyze = {"synthetic", "identical", "approximate", "baseline"}
-        missing = required_for_analyze - set(args.datasets)
-        if missing:
-            print("Analyze_failures step requires all datasets. Missing:", sorted(missing), flush=True)
-            sys.exit(1)
+        print("=== Step: analyze_failures (approximate only) ===", flush=True)
         run_analyze_failures(datasets_root, results_root, args.model_type)
 
     print("Done.", flush=True)
