@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
+import numpy as np
 import pandas as pd
 
 from utils import (
@@ -21,9 +22,12 @@ def plot_accuracy_prob_heatmaps(
     sample_per_bin: int = 500,
     length_bins: Iterable[float] = (0, 10, 15, 20, 25, float("inf")),
     length_labels: Iterable[str] = ("1-10", "11-15", "16-20", "21-25", "26+"),
-    id_bins: Iterable[float] = (50, 75, 100),
-    id_labels: Iterable[str] = ("50-75%", "75-100%"),
 ):
+    """Bin on mutation % = 100 - identity %.
+
+    [0, 25) mutation   <=>  (75, 100] identity
+    [25, 50] mutation  <=>  (50, 75]  identity  (includes 25 and 50)
+    """
     import matplotlib.pyplot as plt
     import seaborn as sns
 
@@ -31,23 +35,27 @@ def plot_accuracy_prob_heatmaps(
     df["length_bin"] = pd.cut(
         df["repeat_length"], bins=list(length_bins), labels=list(length_labels), right=True, include_lowest=True
     )
-    df["identity_bin"] = pd.cut(
-        df["identity_percentage"], bins=list(id_bins), labels=list(id_labels), right=True, include_lowest=True
+    m = pd.to_numeric(df["mutation_percentage"], errors="coerce")
+    df["mutation_bin"] = np.select(
+        [m < 25, (m >= 25) & (m <= 50)],
+        ["0-25%", "25-50%"],
+        default=pd.NA,
     )
-    df = df.dropna(subset=["length_bin", "identity_bin"])
+    df["mutation_bin"] = pd.Categorical(df["mutation_bin"], categories=["0-25%", "25-50%"], ordered=True)
+    df = df.dropna(subset=["length_bin", "mutation_bin"])
     if df.empty:
         return
 
-    grouped = df.groupby(["identity_bin", "length_bin"], sort=False)
+    grouped = df.groupby(["mutation_bin", "length_bin"], sort=False)
     sampled = grouped.apply(lambda x: x.sample(min(len(x), sample_per_bin), random_state=42)).reset_index(drop=True)
 
-    acc = sampled.pivot_table(index="identity_bin", columns="length_bin", values="is_correct", aggfunc="mean")
+    acc = sampled.pivot_table(index="mutation_bin", columns="length_bin", values="is_correct", aggfunc="mean")
     prob = sampled.pivot_table(
-        index="identity_bin", columns="length_bin", values="true_label_probability", aggfunc="mean"
+        index="mutation_bin", columns="length_bin", values="true_label_probability", aggfunc="mean"
     )
-    acc_n = sampled.pivot_table(index="identity_bin", columns="length_bin", values="is_correct", aggfunc="count")
+    acc_n = sampled.pivot_table(index="mutation_bin", columns="length_bin", values="is_correct", aggfunc="count")
     prob_n = sampled.pivot_table(
-        index="identity_bin", columns="length_bin", values="true_label_probability", aggfunc="count"
+        index="mutation_bin", columns="length_bin", values="true_label_probability", aggfunc="count"
     )
 
     acc_annot = acc.round(2).astype(str) + "\n(n=" + acc_n.fillna(0).astype(int).astype(str) + ")"
@@ -57,7 +65,7 @@ def plot_accuracy_prob_heatmaps(
     sns.heatmap(acc, annot=acc_annot, fmt="", cmap="Blues", vmin=0, vmax=1, cbar_kws={"label": "Accuracy"}, ax=axes[0])
     axes[0].set_title("Accuracy")
     axes[0].set_xlabel("Repeat Length Bin")
-    axes[0].set_ylabel("Identity Percentage Bin")
+    axes[0].set_ylabel("Mutation % (100 − identity)")
 
     sns.heatmap(
         prob, annot=prob_annot, fmt="", cmap="Purples", vmin=0, vmax=1,
@@ -95,7 +103,7 @@ def main(args=None):
         "--sample_per_bin",
         type=int,
         default=500,
-        help="Max rows sampled per repeat-length x identity %% cell before averaging",
+        help="Max rows sampled per repeat-length x mutation %% cell before averaging",
     )
     args = parser.parse_args(args)
 
@@ -118,6 +126,7 @@ def main(args=None):
         if col in predictions_df.columns:
             predictions_df = predictions_df.drop(columns=[col])
     predictions_df = predictions_df.merge(meta, on=KEY_COLS, how="left")
+    predictions_df["mutation_percentage"] = 100.0 - predictions_df["identity_percentage"]
 
     approx_sub_mask = scope_mask(predictions_df, "near_sub")
     approx_indel_mask = scope_mask(predictions_df, "near_indel")

@@ -10,7 +10,7 @@ This experiment evaluates language models (ESM3, ESM-C) on masked-token predicti
 
 3) **filter.py** — This script creates filtered datasets based on successful instances per model that are used in counterfactuals—meaning we take only proteins where each model had high accuracy on the repeat prediction task (e.g. accuracy ≥ 1.0 for synthetic/identical, or accuracy_identical ≥ 0.8 for approximate). For approximate repeats we also save which positions are identical in both repeat instances, predicted correctly by the model, and near a substitution, so we can later choose one position at random. The output goes to `datasets/{repeat_type}/{model}/counterfactuals/`.
 
-4) **analyze_failures.py** — **Approximate repeats only.** Builds accuracy/probability heatmaps for **Sub-Adjacent** and **Indel-Adjacent** (all eligible positions; binned by repeat length and identity %). Does not use synthetic, identical, or baseline.
+4) **analyze_failures.py** — **Approximate repeats only.** Builds accuracy/probability heatmaps for **Sub-Adjacent** and **Indel-Adjacent** (binned by repeat length and identity %).
 
 5) **run.py** — The main entry point. Use this script; do not call evaluate.py, filter.py, analyze.py, or analyze_failures.py directly.
 
