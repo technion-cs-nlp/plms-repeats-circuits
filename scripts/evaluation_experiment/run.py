@@ -6,6 +6,7 @@ from pathlib import Path
 import evaluate as evaluate_module
 import filter as filter_module
 import analyze as analyze_module
+import analyze_failures as analyze_failures_module
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -200,6 +201,31 @@ def run_analyze(datasets_root, results_root, model_type):
     ])
 
 
+def run_analyze_failures(datasets_root, results_root, model_type):
+    verify_analyze_inputs(results_root, model_type)
+
+    res = results_dir(results_root, model_type)
+    out = res / "analysis" / "failures"
+    out.mkdir(parents=True, exist_ok=True)
+
+    required = {
+        "approximate_all": res / "approximate" / "predictions.csv",
+        "identical_all": res / "identical" / "predictions.csv",
+        "synthetic_all": res / "synthetic" / "predictions.csv",
+    }
+
+    print(f"[analyze_failures] -> {out}", flush=True)
+    analyze_failures_module.main([
+        "--synthetic_source", str(dataset_path(datasets_root, "synthetic")),
+        "--synthetic_all", str(required["synthetic_all"]),
+        "--identical_source", str(dataset_path(datasets_root, "identical")),
+        "--identical_all", str(required["identical_all"]),
+        "--approximate_source", str(dataset_path(datasets_root, "approximate")),
+        "--approximate_all", str(required["approximate_all"]),
+        "--output_dir", str(out),
+    ])
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run the evaluation experiment pipeline",
@@ -212,7 +238,7 @@ def main():
                         help="Root folder for outputs: <root>/evaluation/<model_type>/<dataset>/..., etc.")
     parser.add_argument("--model_type", choices=["esm3", "esm-c"], default="esm3")
     parser.add_argument("--steps", nargs="+", default=["evaluate", "filter", "analyze"],
-                        choices=["evaluate", "filter", "analyze"],
+                        choices=["evaluate", "filter", "analyze", "analyze_failures"],
                         help="Which pipeline steps to run")
     parser.add_argument("--datasets", nargs="+",
                         default=["synthetic", "identical", "approximate", "baseline"],
@@ -240,6 +266,15 @@ def main():
             print("Analyze step requires all datasets. Missing:", sorted(missing), flush=True)
             sys.exit(1)
         run_analyze(datasets_root, results_root, args.model_type)
+
+    if "analyze_failures" in args.steps:
+        print("=== Step: analyze_failures ===", flush=True)
+        required_for_analyze = {"synthetic", "identical", "approximate", "baseline"}
+        missing = required_for_analyze - set(args.datasets)
+        if missing:
+            print("Analyze_failures step requires all datasets. Missing:", sorted(missing), flush=True)
+            sys.exit(1)
+        run_analyze_failures(datasets_root, results_root, args.model_type)
 
     print("Done.", flush=True)
 

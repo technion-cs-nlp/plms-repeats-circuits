@@ -2,7 +2,7 @@
 
 This experiment evaluates language models (ESM3, ESM-C) on masked-token prediction over repeat and baseline datasets. The pipeline produces model accuracy on repeat prediction tasks (Table 1 in the paper) and filtered datasets for the counterfactuals methods experiment.
 
-**3 phases (use run.py):**
+**Pipeline steps (use run.py):**
 
 1) **evaluate.py** — This script gets an input dataset (proteins with repeats or without repeats) and evaluates if the model correctly predicts (top-1) the masked token. It operates in two modes: repeat and baseline. For repeat mode it tests the model on all repeat positions masked per protein. For baseline mode it randomly chooses one position per protein and tests the model on that. The script produces a file called `predictions.csv` (or `baseline_predictions.csv` for baseline) where it saves per-position true label, predicted label, probabilities, and is_correct. For the purpose of our experiments we run the script per model on all 4 datasets (synthetic, identical, approximate, baseline).
 
@@ -10,7 +10,9 @@ This experiment evaluates language models (ESM3, ESM-C) on masked-token predicti
 
 3) **filter.py** — This script creates filtered datasets based on successful instances per model that are used in counterfactuals—meaning we take only proteins where each model had high accuracy on the repeat prediction task (e.g. accuracy ≥ 1.0 for synthetic/identical, or accuracy_identical ≥ 0.8 for approximate). For approximate repeats we also save which positions are identical in both repeat instances, predicted correctly by the model, and near a substitution, so we can later choose one position at random. The output goes to `datasets/{repeat_type}/{model}/counterfactuals/`.
 
-4) **run.py** — The main entry point. Use this script; do not call evaluate.py, filter.py, or analyze.py directly.
+4) **analyze_failures.py** — Enriches per-position `predictions.csv` with evaluation-dataset metadata and computes per-repeat success rates plus lists of success/failure positions per task. Also produces plots of average success rate as a function of repeat length and identity percentage (heatmaps) and repeat-length-binned accuracy plots.
+
+5) **run.py** — The main entry point. Use this script; do not call evaluate.py, filter.py, analyze.py, or analyze_failures.py directly.
 
 ---
 
@@ -35,13 +37,14 @@ This experiment evaluates language models (ESM3, ESM-C) on masked-token predicti
 | evaluate | `{results_root}/evaluation/{model_type}/synthetic/predictions.csv`, `identical/predictions.csv`, `approximate/predictions.csv`, `baseline/baseline_predictions.csv` |
 | filter | `{datasets_root}/{repeat_type}/{model_type}/counterfactuals/` (e.g. `synthetic_eval_filtered.csv`, `approximate_eval_filtered_near_sub.csv`) |
 | analyze | `{results_root}/evaluation/{model_type}/analysis/tasks_performance.csv` |
+| analyze_failures | `{results_root}/evaluation/{model_type}/analysis/failures/` |
 
 **Parameters:**
 
 | Argument | Description | Default |
 |----------|-------------|---------|
 | `--model_type` | Model to evaluate: `esm3` or `esm-c` | `esm3` |
-| `--steps` | Which phases to run: `evaluate`, `filter`, `analyze` (can list multiple) | all three |
+| `--steps` | Which phases to run: `evaluate`, `filter`, `analyze`, `analyze_failures` (can list multiple) | `evaluate filter analyze` |
 | `--datasets` | Which datasets to process: `synthetic`, `identical`, `approximate`, `baseline` | all four |
 | `--datasets_root` | Root folder for input datasets | `{repo}/datasets` |
 | `--results_root` | Root folder for predictions and analysis | `{repo}/results` |
@@ -63,6 +66,9 @@ python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate
 
 # Evaluate and filter, skip analyze
 python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate filter
+
+# Failure analysis only (requires predictions already exist)
+python scripts/evaluation_experiment/run.py --model_type esm3 --steps analyze_failures
 
 # Evaluate only synthetic and identical
 python scripts/evaluation_experiment/run.py --model_type esm3 --steps evaluate --datasets synthetic identical
