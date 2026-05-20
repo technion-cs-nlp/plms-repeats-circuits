@@ -18,6 +18,7 @@
 │   ├── attention_heads_clustering_experiments/  # Attention heads clustering
 │   ├── interactions_graph_experiment/           # Interaction graph between attention-head clusters and MLP clusters
 │   ├── logit_lens_experiments/       # Logit lens for the repeat prediction task
+│   ├── attribution_vs_mutations_experiment/  # Attribution vs BLOSUM mutations in non-masked repeat
 │   └── neurons_analysis_experiment/  # Neuron–concept matching and analysis
 ├── datasets/                # All datasets
 ├── ThirdParty/              # Fork of TransformerLens containing ESM-C and ESM3 support
@@ -131,6 +132,10 @@ Creates interaction graph (Figure 7+16 in the paper). Requires circuit discovery
 ### Logit Lens
 
 Computes logit lens metrics (top-1 accuracy, correct-token probability) for residual stream, attention heads, and MLPs across layers. Produces the logit lens across layers and clusters plot (paper figures 8 and 17). Requires circuit discovery datasets, component recurrence, and attention heads clustering. Run with e.g. `python scripts/logit_lens_experiments/run.py --repeat_type approximate --counterfactual_type blosum`. See [scripts/logit_lens_experiments/README.md](scripts/logit_lens_experiments/README.md) for details.
+
+### Attribution vs Mutations
+
+Measures how recurring **node** attribution scores change as extra BLOSUM substitutions are added to the non-masked repeat (EAP-IG, top BLOSUM substitution only). Produces the induction-heads vs substitution-rate plot. Requires circuit discovery datasets, component recurrence (nodes), and attention-head clustering. Run with e.g. `python scripts/attribution_vs_mutations_experiment/run.py --model_types esm-c` (default: identical dataset, approximate component recurrence). See [scripts/attribution_vs_mutations_experiment/README.md](scripts/attribution_vs_mutations_experiment/README.md) for details.
 
 ### Neurons Analysis Experiment
 
